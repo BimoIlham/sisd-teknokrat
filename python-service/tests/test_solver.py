@@ -138,3 +138,67 @@ def test_feasible_assignment_and_locked_preservation():
     target1_assigned = [a for a in res.assignments if a.target_id == 1][0]
     assert target1_assigned.supervisor_id == 10
     assert target1_assigned.occurrence_id == 101
+
+
+def priority_request(occurrences, **kwargs):
+    return SolveAssignmentsRequest(
+        request_id="offline-priority", input_revision=1, input_hash="offline-priority",
+        period_id=1, stage_id=1, stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(),
+        targets=[TargetLecturer(id=target_id, name=f"Target {target_id}") for target_id in sorted({occ.target_id for occ in occurrences})],
+        supervisors=[SupervisorLecturer(id=10, name="Supervisor")],
+        occurrences=occurrences, **kwargs,
+    )
+
+
+def priority_occurrence(occurrence_id, mode, target_id=1, day="2026-10-05"):
+    return TeachingOccurrence(
+        id=occurrence_id, target_id=target_id, occurs_on=day,
+        starts_at=f"{day}T01:00:00Z", ends_at=f"{day}T02:40:00Z",
+        delivery_mode=mode, course_name="Mata Kuliah", class_name="Kelas",
+    )
+
+
+def test_offline_priority_overrides_previous_online_auto_assignment():
+    request = priority_request(
+        [priority_occurrence(101, "ONLINE"), priority_occurrence(102, "OFFLINE", day="2026-10-06")],
+        previous_auto_assignments=[AssignmentItem(target_id=1, supervisor_id=10, occurrence_id=101)],
+    )
+    result = CpSatScheduleSolver().solve(request)
+    assert result.assignments[0].occurrence_id == 102
+
+
+def test_online_fallback_when_offline_conflicts_with_teaching():
+    request = priority_request(
+        [priority_occurrence(101, "OFFLINE"), priority_occurrence(102, "ONLINE", day="2026-10-06")],
+        teaching_busy_intervals=[TeachingBusyInterval(supervisor_id=10, occurs_on="2026-10-05", starts_at="2026-10-05T01:00:00Z", ends_at="2026-10-05T02:40:00Z")],
+    )
+    result = CpSatScheduleSolver().solve(request)
+    assert result.coverage_status == "FULL"
+    assert result.assignments[0].occurrence_id == 102
+
+
+def test_online_only_target_is_still_assigned():
+    result = CpSatScheduleSolver().solve(priority_request([priority_occurrence(101, "ONLINE")]))
+    assert result.coverage_status == "FULL"
+    assert result.assignments[0].occurrence_id == 101
+
+
+def test_offline_preference_keeps_full_coverage_when_two_targets_conflict():
+    result = CpSatScheduleSolver().solve(priority_request([
+        priority_occurrence(101, "OFFLINE"),
+        priority_occurrence(102, "ONLINE", day="2026-10-06"),
+        priority_occurrence(201, "OFFLINE", target_id=2),
+    ]))
+    assert result.coverage_status == "FULL"
+    assert {item.occurrence_id for item in result.assignments} == {102, 201}
+
+
+def test_explicitly_locked_online_assignment_is_preserved():
+    request = priority_request(
+        [priority_occurrence(101, "ONLINE"), priority_occurrence(102, "OFFLINE", day="2026-10-06")],
+        locked_assignments=[AssignmentItem(target_id=1, supervisor_id=10, occurrence_id=101)],
+    )
+    result = CpSatScheduleSolver().solve(request)
+    assert result.assignments[0].occurrence_id == 101

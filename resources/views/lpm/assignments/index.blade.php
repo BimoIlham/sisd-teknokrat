@@ -315,6 +315,7 @@
                 <span class="text-slate-700 font-semibold">{{ $period ? $period->name : 'Belum ada periode aktif' }}</span>
             </div>
             <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Workspace Penugasan Supervisi</h1>
+            <p class="mt-1 text-xs text-slate-500">Penugasan otomatis mengutamakan kelas offline yang tidak bentrok. Kelas online dipilih bila tidak ada pilihan offline yang valid.</p>
         </div>
 
     </div>

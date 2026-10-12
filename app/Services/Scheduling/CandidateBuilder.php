@@ -109,6 +109,7 @@ class CandidateBuilder
                         'course_code' => $schedule->course->code,
                         'course_name' => $schedule->course->name,
                         'room' => $schedule->room_display,
+                        'delivery_mode' => $schedule->delivery_mode,
                     ];
                 }
             }

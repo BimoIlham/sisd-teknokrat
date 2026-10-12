@@ -9,6 +9,7 @@ use App\Models\TeachingOccurrence;
 use App\Models\User;
 use App\Services\PythonServiceConnection;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -163,7 +164,7 @@ class SolverClientService
      * Fallback internal deterministic constraint scheduler adhering strictly to H01-H08.
      * Guarantees zero time-overlap for any supervisor on the same date.
      */
-    protected function solveInternally(array $pool, $lockedAssignments): array
+    protected function solveInternally(array $pool, Collection $lockedAssignments): array
     {
         $startedAt = microtime(true);
         $assignedTargets = [];
@@ -214,8 +215,14 @@ class SolverClientService
             $candidatesByTarget[$cand['target_lecturer_id']][] = $cand;
         }
 
-        // 2. Schedule remaining targets (Strict No Overlap & Spread Across Dates)
-        foreach ($pool['targets'] as $target) {
+        $orderedTargets = collect($pool['targets'])->sortBy(function (array $target) use ($candidatesByTarget): array {
+            $options = $candidatesByTarget[$target['lecturer_id']] ?? [];
+            $offlineCount = count(array_filter($options, fn (array $option): bool => SupervisionModePriority::rank($option['delivery_mode'] ?? null) === 0));
+
+            return [count($options), $offlineCount > 0 ? 0 : 1, $target['lecturer_id']];
+        })->values()->all();
+
+        foreach ($orderedTargets as $target) {
             $targetId = $target['lecturer_id'];
             if (isset($assignedTargets[$targetId])) {
                 continue;
@@ -228,12 +235,11 @@ class SolverClientService
                 continue;
             }
 
-            // Sort options:
-            // a) Supervisor current total load ascending (load balancing)
-            // b) Supervisor load on this specific date ascending (spread across days!)
-            // c) Supervisor load on this day/time slot ascending (avoid crowding the same recurring slot)
-            // d) Date ascending
-            usort($options, function ($a, $b) use ($supervisorCounts, $supervisorDailyCounts, $supervisorSlotCounts) {
+            usort($options, function (array $a, array $b) use ($supervisorCounts, $supervisorDailyCounts, $supervisorSlotCounts): int {
+                $modeOrder = SupervisionModePriority::rank($a['delivery_mode'] ?? null) <=> SupervisionModePriority::rank($b['delivery_mode'] ?? null);
+                if ($modeOrder !== 0) {
+                    return $modeOrder;
+                }
                 $supA = $a['supervisor_lecturer_id'];
                 $supB = $b['supervisor_lecturer_id'];
 

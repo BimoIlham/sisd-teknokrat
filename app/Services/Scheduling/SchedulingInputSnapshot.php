@@ -34,7 +34,8 @@ class SchedulingInputSnapshot
         }
 
         return [
-            'version' => 1,
+            'version' => 2,
+            'selection_policy' => 'offline_first_v1',
             'period' => $period->only(['id', 'academic_term_id', 'status', 'starts_on', 'ends_on', 'active_scheduling_rule_id']),
             'term' => $period->academicTerm->only(['id', 'starts_on', 'ends_on', 'timezone']),
             'stage_id' => $stage->id,

@@ -64,6 +64,18 @@ class PeriodAssignmentPairService
             $sourceOccurrence
         );
 
+        if ($counterpart && ! $counterpart->is_locked && ! $this->isStageLocked($counterpartStage, $counterpart)
+            && ! in_array($counterpart->assignment_type, ['MANUAL', 'LOCKED'], true)) {
+            $preferred = $this->findCompatibleOccurrence(
+                $counterpartStage, (int) $source->target_lecturer_id, (int) $source->supervisor_lecturer_id,
+                $sourceStage, $sourceOccurrence, $counterpart
+            );
+            if ($preferred && (! $occurrence || SupervisionModePriority::rank($preferred->teachingSchedule?->delivery_mode)
+                < SupervisionModePriority::rank($occurrence->teachingSchedule?->delivery_mode))) {
+                $occurrence = $preferred;
+            }
+        }
+
         if (! $occurrence) {
             $occurrence = $this->findCompatibleOccurrence(
                 $counterpartStage,
@@ -83,7 +95,8 @@ class PeriodAssignmentPairService
             ]);
         }
 
-        if ($counterpart && $this->isStageLocked($counterpartStage, $counterpart)) {
+        if ($counterpart && ($this->isStageLocked($counterpartStage, $counterpart)
+            || ($counterpart->assignment_type === 'AUTO' && $counterpart->is_locked))) {
             if ((int) $counterpart->supervisor_lecturer_id !== (int) $source->supervisor_lecturer_id
                 || (int) $counterpart->teaching_occurrence_id !== (int) $occurrence->id) {
                 throw ValidationException::withMessages([
@@ -341,7 +354,10 @@ class PeriodAssignmentPairService
             ->with('teachingSchedule')
             ->orderBy('occurs_on')
             ->orderBy('starts_at')
-            ->get();
+            ->get()->sortBy(fn (TeachingOccurrence $occurrence): array => [
+                SupervisionModePriority::rank($occurrence->teachingSchedule?->delivery_mode),
+                $occurrence->occurs_on->toDateString(), $occurrence->starts_at->timestamp, $occurrence->id,
+            ]);
 
         foreach ($occurrences as $occurrence) {
             if (! $this->respectsStageOrder($stage, $occurrence, $sourceStage, $sourceOccurrence)) {

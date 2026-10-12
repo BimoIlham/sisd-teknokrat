@@ -239,11 +239,6 @@ class CpSatScheduleSolver:
                 for d_str, v_list in by_date.items():
                     model.Add(sum(v_list) <= max_day)
 
-        # Objective Function:
-        # Hierarchical via large weights:
-        # 1. Maximize coverage: 10,000 * sum(all assigned)
-        # 2. Stability: 100 * sum(assigned matching previous_auto)
-        # 3. Balance: minimize max_load -> penalized with -10 * max_load
         assigned_vars = list(var_x.values())
         if not assigned_vars:
             return SolveAssignmentsResponse(
@@ -260,6 +255,7 @@ class CpSatScheduleSolver:
 
         total_coverage = sum(assigned_vars)
         stability_bonus = sum(var_x[k] for k in candidates if k in prev_auto_set)
+        offline_bonus = sum(var_x[k] for k in candidates if occ_map[k[2]].delivery_mode == "OFFLINE")
 
         # Max load variable across supervisors
         max_load = model.NewIntVar(0, len(req.targets), "max_load")
@@ -267,8 +263,12 @@ class CpSatScheduleSolver:
             if c_list:
                 model.Add(sum(var_x[c] for c in c_list) <= max_load)
 
-        # Objective: 10000 * coverage + 10 * stability - 100 * max_load
-        model.Maximize(10000 * total_coverage + 10 * stability_bonus - 100 * max_load)
+        # Coverage dominates mode preference; offline dominates balance and stability.
+        target_count = len(req.targets)
+        secondary_range = 110 * target_count
+        offline_weight = secondary_range + 1
+        coverage_weight = offline_weight * target_count + secondary_range + 1
+        model.Maximize(coverage_weight * total_coverage + offline_weight * offline_bonus + 10 * stability_bonus - 100 * max_load)
 
         # Solve
         solver = cp_model.CpSolver()
