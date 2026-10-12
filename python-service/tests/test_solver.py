@@ -1,0 +1,140 @@
+import pytest
+from app.contracts.solver_schemas import (
+    SolveAssignmentsRequest,
+    DateRange,
+    SchedulingRuleConfig,
+    TargetLecturer,
+    SupervisorLecturer,
+    TeachingOccurrence,
+    TeachingBusyInterval,
+    AssignmentItem
+)
+from app.scheduler.cp_sat_solver import CpSatScheduleSolver
+
+def test_hard_constraint_h01_no_self_supervision():
+    solver = CpSatScheduleSolver()
+    # Dosen 1 is both target and supervisor
+    req = SolveAssignmentsRequest(
+        contract_version="1.0",
+        request_id="test-h01",
+        input_revision=1,
+        input_hash="hash-h01",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(),
+        targets=[TargetLecturer(id=1, name="Dosen 1")],
+        supervisors=[SupervisorLecturer(id=1, name="Dosen 1")], # Only himself available
+        occurrences=[TeachingOccurrence(
+            id=101,
+            target_id=1,
+            occurs_on="2026-10-05",
+            starts_at="2026-10-05T02:00:00Z",
+            ends_at="2026-10-05T03:40:00Z",
+            course_name="Algoritma",
+            class_name="IF23A"
+        )]
+    )
+    res = solver.solve(req)
+    assert len(res.assignments) == 0
+    assert res.coverage_status == "NONE"
+    assert res.unassigned[0].target_id == 1
+    assert "NO_FREE_SUPERVISOR" in res.unassigned[0].reason_codes
+
+def test_hard_constraint_h03_teaching_overlap():
+    solver = CpSatScheduleSolver()
+    # Supervisor 2 teaches at 02:00-03:40 UTC, target 1 also occurs at 02:00-03:40 UTC
+    req = SolveAssignmentsRequest(
+        contract_version="1.0",
+        request_id="test-h03",
+        input_revision=1,
+        input_hash="hash-h03",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(buffer_minutes=0),
+        targets=[TargetLecturer(id=1, name="Dosen Target")],
+        supervisors=[SupervisorLecturer(id=2, name="Dosen Supervisor")],
+        occurrences=[TeachingOccurrence(
+            id=101,
+            target_id=1,
+            occurs_on="2026-10-05",
+            starts_at="2026-10-05T02:00:00Z",
+            ends_at="2026-10-05T03:40:00Z",
+            course_name="Algoritma",
+            class_name="IF23A"
+        )],
+        teaching_busy_intervals=[TeachingBusyInterval(
+            supervisor_id=2,
+            occurs_on="2026-10-05",
+            starts_at="2026-10-05T02:00:00Z",
+            ends_at="2026-10-05T03:40:00Z"
+        )]
+    )
+    res = solver.solve(req)
+    assert len(res.assignments) == 0
+    assert res.coverage_status == "NONE"
+
+def test_hard_constraint_h05_threshold_gte_3():
+    solver = CpSatScheduleSolver()
+    # Supervisor has 3 classes on 2026-10-05
+    req = SolveAssignmentsRequest(
+        contract_version="1.0",
+        request_id="test-h05",
+        input_revision=1,
+        input_hash="hash-h05",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(block_supervision_when_teaching_count_gte=3),
+        targets=[TargetLecturer(id=1, name="Dosen Target")],
+        supervisors=[SupervisorLecturer(id=2, name="Dosen Supervisor")],
+        occurrences=[TeachingOccurrence(
+            id=101,
+            target_id=1,
+            occurs_on="2026-10-05",
+            starts_at="2026-10-05T08:00:00Z", # completely different time
+            ends_at="2026-10-05T09:40:00Z",
+            course_name="Algoritma",
+            class_name="IF23A"
+        )],
+        teaching_busy_intervals=[
+            TeachingBusyInterval(supervisor_id=2, occurs_on="2026-10-05", starts_at="2026-10-05T01:00:00Z", ends_at="2026-10-05T02:00:00Z"),
+            TeachingBusyInterval(supervisor_id=2, occurs_on="2026-10-05", starts_at="2026-10-05T03:00:00Z", ends_at="2026-10-05T04:00:00Z"),
+            TeachingBusyInterval(supervisor_id=2, occurs_on="2026-10-05", starts_at="2026-10-05T05:00:00Z", ends_at="2026-10-05T06:00:00Z"),
+        ]
+    )
+    res = solver.solve(req)
+    assert len(res.assignments) == 0
+
+def test_feasible_assignment_and_locked_preservation():
+    solver = CpSatScheduleSolver()
+    req = SolveAssignmentsRequest(
+        contract_version="1.0",
+        request_id="test-feasible",
+        input_revision=1,
+        input_hash="hash-feasible",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(),
+        targets=[TargetLecturer(id=1, name="Target 1"), TargetLecturer(id=2, name="Target 2")],
+        supervisors=[SupervisorLecturer(id=10, name="Supervisor 10"), SupervisorLecturer(id=20, name="Supervisor 20")],
+        occurrences=[
+            TeachingOccurrence(id=101, target_id=1, occurs_on="2026-10-05", starts_at="2026-10-05T01:00:00Z", ends_at="2026-10-05T02:40:00Z", course_name="MK1", class_name="K1"),
+            TeachingOccurrence(id=102, target_id=2, occurs_on="2026-10-05", starts_at="2026-10-05T03:00:00Z", ends_at="2026-10-05T04:40:00Z", course_name="MK2", class_name="K2")
+        ],
+        locked_assignments=[AssignmentItem(target_id=1, supervisor_id=10, occurrence_id=101)]
+    )
+    res = solver.solve(req)
+    assert res.solver_status in ("OPTIMAL", "FEASIBLE")
+    assert res.coverage_status == "FULL"
+    assert len(res.assignments) == 2
+    # Ensure locked assignment was preserved exactly
+    target1_assigned = [a for a in res.assignments if a.target_id == 1][0]
+    assert target1_assigned.supervisor_id == 10
+    assert target1_assigned.occurrence_id == 101
