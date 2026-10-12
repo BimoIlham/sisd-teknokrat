@@ -300,6 +300,19 @@
                                             Detail
                                         </a>
 
+                                        @if(isset($rotationSelections[$supervisor->id]))
+                                            <form action="{{ route('lpm.supervisors.reset_password', $supervisor) }}" method="POST"
+                                                  data-supervisor-name="{{ $supervisor->name }}" data-supervisor-email="{{ $supervisor->user->email }}"
+                                                  data-default-password="{{ $defaultInitialPassword }}" @submit.prevent="confirmSupervisorPasswordReset($event.currentTarget)">
+                                                @csrf
+                                                <input type="hidden" name="period_id" value="{{ $selectedPeriod?->id }}">
+                                                <input type="hidden" name="confirm_email" value="{{ $supervisor->user->email }}">
+                                                <input type="hidden" name="confirm_reset" value="1">
+                                                <input type="hidden" name="credential_state" value="{{ $rotationSelections[$supervisor->id] }}">
+                                                <button type="submit" aria-label="Reset password {{ $supervisor->name }}" class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50">Reset Password</button>
+                                            </form>
+                                        @endif
+
                                         <button 
                                             type="button" 
                                             @click="openDeleteModal({{ json_encode(['id' => $supervisor->id, 'name' => $supervisor->name]) }})" 
@@ -546,6 +559,36 @@
 </div>
 
 <script>
+async function confirmSupervisorPasswordReset(form) {
+    if (form.dataset.submitting === 'true') {
+        return;
+    }
+    const message = 'Reset password ' + form.dataset.supervisorName + ' (' + form.dataset.supervisorEmail + ') ke ' + form.dataset.defaultPassword + '? Supervisor wajib mengganti sandi saat login berikutnya.';
+    form.dataset.submitting = 'true';
+    try {
+        const confirmed = window.Swal
+            ? (await window.Swal.fire({
+                titleText: 'Reset Password Supervisor?',
+                text: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Reset Password',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#7B1113',
+                focusCancel: true,
+            })).isConfirmed
+            : window.confirm(message);
+        if (confirmed) {
+            form.querySelector('button[type="submit"]').disabled = true;
+            form.submit();
+        } else {
+            form.dataset.submitting = 'false';
+        }
+    } catch (error) {
+        form.dataset.submitting = 'false';
+    }
+}
+
 function supervisorDirectoryApp() {
     return {
         addModalOpen: {{ $errors->any() ? 'true' : 'false' }},

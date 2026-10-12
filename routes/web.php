@@ -98,6 +98,7 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
     // Lecturer Directory & Reports
     Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');
     Route::post('/lecturers', [LecturerDirectoryController::class, 'store'])->name('lecturers.store');
+    Route::delete('/lecturers/{lecturer}', [LecturerDirectoryController::class, 'destroy'])->name('lecturers.destroy');
     Route::patch('/lecturers/{lecturer}', [LecturerDirectoryController::class, 'updateProfile'])->name('lecturers.update_profile');
     Route::patch('/lecturers/{lecturer}/prodi', [LecturerDirectoryController::class, 'updateStudyProgram'])->name('lecturers.update_prodi');
     Route::get('/lecturers/{lecturer}/periods/{period}/schedules/create', [LecturerDirectoryController::class, 'createSchedule'])->name('lecturers.schedules.create');
@@ -114,6 +115,8 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
     Route::get('/supervisors', [SupervisorDirectoryController::class, 'index'])->block(30, 10)->name('supervisors.index');
     Route::get('/supervisors/periods/{period}/candidates', [SupervisorDirectoryController::class, 'candidates'])->name('supervisors.candidates');
     Route::post('/supervisors', [SupervisorDirectoryController::class, 'store'])->block(30, 10)->name('supervisors.store');
+    Route::post('/supervisors/{supervisor}/reset-password', [SupervisorDirectoryController::class, 'resetPassword'])
+        ->middleware('throttle:5,1')->block(30, 10)->name('supervisors.reset_password');
     Route::post('/supervisors/{supervisor}/rotate-legacy-credential', [SupervisorDirectoryController::class, 'rotateLegacyCredential'])
         ->middleware('throttle:5,1')->block(30, 10)->name('supervisors.rotate_legacy_credential');
     Route::get('/supervisors/{supervisor}/stages/{stage}/surat-tugas', [SupervisorDirectoryController::class, 'downloadAssignmentLetter'])->middleware('throttle:report-exports')->name('supervisors.assignment_letter');

@@ -13,7 +13,6 @@ use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -132,15 +131,14 @@ class SupervisorDirectoryTest extends TestCase
 
         $response->assertRedirect(route('lpm.supervisors.index', ['period_id' => $period->id]));
         $response->assertSessionHas('success');
-        $response->assertSessionHas('supervisor_initial_password');
-        $initialPassword = Crypt::decryptString(session('supervisor_initial_password'));
+        $response->assertSessionMissing('supervisor_initial_password');
+        $initialPassword = 'Teknokrat123@';
 
         $user = User::where('email', 'calon.supervisor@teknokrat.ac.id')->first();
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('supervisor'));
         $this->assertEquals($lecturer->id, $user->lecturer_id);
         $this->assertTrue($user->must_change_password);
-        $this->assertGreaterThanOrEqual(20, strlen($initialPassword));
         $this->assertNotSame($initialPassword, $user->getRawOriginal('password'));
         $this->assertTrue(Hash::check($initialPassword, $user->password));
         $logPath = storage_path('logs/laravel.log');
@@ -150,11 +148,11 @@ class SupervisorDirectoryTest extends TestCase
 
         $firstView = $this->get(route('lpm.supervisors.index', ['period_id' => $period->id]));
         $firstView->assertOk();
-        $firstView->assertViewHas('initialPassword', fn ($password) => $password === $initialPassword);
+        $firstView->assertViewHas('defaultInitialPassword', $initialPassword);
         $this->assertTrue(str_contains($firstView->getContent(), e($initialPassword)));
         $secondView = $this->get(route('lpm.supervisors.index', ['period_id' => $period->id]));
         $secondView->assertOk();
-        $secondView->assertViewHas('initialPassword', null);
+        $secondView->assertViewHas('defaultInitialPassword', $initialPassword);
 
         $secondLecturer = Lecturer::create([
             'name' => 'Calon Supervisor Kedua, M.T.',
@@ -165,9 +163,8 @@ class SupervisorDirectoryTest extends TestCase
             'lecturer_id' => $secondLecturer->id,
             'email' => 'calon.supervisor.kedua@teknokrat.ac.id',
             'supervision_period_id' => $period->id,
-        ])->assertSessionHas('supervisor_initial_password');
-        $secondInitialPassword = Crypt::decryptString(session('supervisor_initial_password'));
-        $this->assertNotSame($initialPassword, $secondInitialPassword);
+        ])->assertSessionHas('success')->assertSessionMissing('supervisor_initial_password');
+        $secondInitialPassword = $initialPassword;
 
         $secondUser = User::where('lecturer_id', $secondLecturer->id)->firstOrFail();
         $this->assertTrue($secondUser->must_change_password);
@@ -193,8 +190,8 @@ class SupervisorDirectoryTest extends TestCase
             'lecturer_id' => $lecturer->id,
             'email' => $email,
             'supervision_period_id' => $this->period->id,
-        ])->assertSessionHas('supervisor_initial_password');
-        $initialPassword = Crypt::decryptString(session('supervisor_initial_password'));
+        ])->assertSessionHas('success')->assertSessionMissing('supervisor_initial_password');
+        $initialPassword = 'Teknokrat123@';
         $user = User::where('email', $email)->firstOrFail();
 
         $this->post(route('logout'))->assertRedirect(route('login'));
@@ -284,9 +281,13 @@ class SupervisorDirectoryTest extends TestCase
         $this->post(route('lpm.supervisors.store'), [
             'lecturer_id' => $target->id,
             'supervision_period_id' => $this->period->id,
-        ])->assertSessionHasErrors('email');
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
         $this->assertSame($owner->id, $ownerUser->fresh()->lecturer_id);
         $this->assertFalse($ownerUser->hasRole('supervisor'));
+        $targetUser = User::where('lecturer_id', $target->id)->firstOrFail();
+        $this->assertNotSame($ownerUser->email, $targetUser->email);
+        $this->assertTrue($targetUser->hasRole('supervisor'));
+        $this->assertTrue(Hash::check('Teknokrat123@', $targetUser->password));
     }
 
     public function test_existing_lecturer_account_keeps_its_password_and_status_when_assigned(): void

@@ -152,6 +152,13 @@
                                     <a href="{{ route('lpm.lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) }}" class="inline-flex items-center rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-[#7B1113] transition-colors hover:bg-slate-100">
                                         Detail &rarr;
                                     </a>
+                                    <form method="POST" action="{{ route('lpm.lecturers.destroy', $lecturer) }}" data-lecturer-name="{{ $lecturer->name }}" @submit.prevent="confirmLecturerDeletion($event.currentTarget)">
+                                        @csrf
+                                        @method('DELETE')
+                                        <input type="hidden" name="period_id" value="{{ $selectedPeriod?->id }}">
+                                        <input type="hidden" name="row_version" value="{{ $lecturer->row_version }}">
+                                        <button type="submit" aria-label="Hapus dosen {{ $lecturer->name }}" class="inline-flex items-center rounded-lg border border-rose-200 px-2 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:opacity-50">Hapus</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -221,6 +228,36 @@
 </div>
 
 <script>
+    async function confirmLecturerDeletion(form) {
+        if (form.dataset.submitting === 'true') {
+            return;
+        }
+        const message = 'Hapus ' + form.dataset.lecturerName + ' dari direktori beserta jadwal mengajarnya di semua periode?';
+        form.dataset.submitting = 'true';
+        try {
+            const confirmed = window.Swal
+                ? (await window.Swal.fire({
+                    titleText: 'Hapus Dosen?',
+                    text: message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Hapus',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#7B1113',
+                    focusCancel: true,
+                })).isConfirmed
+                : window.confirm(message);
+            if (confirmed) {
+                form.querySelector('button[type="submit"]').disabled = true;
+                form.submit();
+            } else {
+                form.dataset.submitting = 'false';
+            }
+        } catch (error) {
+            form.dataset.submitting = 'false';
+        }
+    }
+
     function lecturerProfileEditor(faculties, selectedPeriodId) {
         return {
             editing: false,

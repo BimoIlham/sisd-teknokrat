@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Lpm;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Faculty;
+use App\Models\GeneratedDocument;
 use App\Models\Lecturer;
 use App\Models\PeriodTarget;
 use App\Models\ScheduleImportRow;
@@ -13,6 +14,8 @@ use App\Models\Supervision;
 use App\Models\SupervisionAnswer;
 use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
+use App\Models\SystemAudit;
+use App\Models\TeachingOccurrence;
 use App\Models\TeachingSchedule;
 use App\Services\Academic\OccurrenceGeneratorService;
 use App\Services\Reporting\SupervisionResultPdfService;
@@ -25,6 +28,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LecturerDirectoryController extends Controller
@@ -199,6 +203,58 @@ class LecturerDirectoryController extends Controller
         }
 
         return redirect()->to($redirectUrl)->with('success', 'Dosen baru berhasil ditambahkan.');
+    }
+
+    public function destroy(Request $request, Lecturer $lecturer): RedirectResponse
+    {
+        $validated = $request->validate([
+            'row_version' => ['required', 'integer', 'min:1'],
+            'period_id' => ['nullable', 'integer', 'exists:supervision_periods,id'],
+        ]);
+        $redirect = route('lpm.lecturers.index', array_filter(['period_id' => $validated['period_id'] ?? null]));
+
+        try {
+            DB::transaction(function () use ($lecturer, $validated, $request): void {
+                $locks = app(SchedulingLockService::class);
+                $state = $locks->state();
+                $lecturer = Lecturer::whereKey($lecturer->id)->lockForUpdate()->firstOrFail();
+                if ($lecturer->row_version !== (int) $validated['row_version']) {
+                    throw ValidationException::withMessages(['lecturer' => 'Data dosen sudah berubah. Muat ulang halaman sebelum menghapus.']);
+                }
+                if ($lecturer->user()->exists() || $lecturer->periodSupervisors()->exists()) {
+                    throw ValidationException::withMessages(['lecturer' => 'Dosen memiliki akun atau riwayat penetapan supervisor sehingga tidak dapat dihapus dari direktori.']);
+                }
+                if ($lecturer->assignmentsAsTarget()->exists() || $lecturer->assignmentsAsSupervisor()->exists()
+                    || GeneratedDocument::where('supervisor_lecturer_id', $lecturer->id)->exists()) {
+                    throw ValidationException::withMessages(['lecturer' => 'Dosen memiliki penugasan atau riwayat supervisi sehingga tidak dapat dihapus.']);
+                }
+                $scheduleIds = $lecturer->teachingSchedules()->orderBy('id')->lockForUpdate()->pluck('id');
+                if (TeachingOccurrence::whereIn('teaching_schedule_id', $scheduleIds)->whereHas('assignments')->exists()) {
+                    throw ValidationException::withMessages(['lecturer' => 'Jadwal dosen masih terkait penugasan supervisi sehingga tidak dapat dihapus.']);
+                }
+                ScheduleImportRow::where('matched_lecturer_id', $lecturer->id)->update([
+                    'matched_lecturer_id' => null, 'committed_schedule_id' => null,
+                    'validation_status' => 'SKIPPED', 'is_approved' => false,
+                    'skip_reason' => 'Dosen dihapus manual dari Direktori Dosen.',
+                    'row_version' => DB::raw('row_version + 1'),
+                ]);
+                TeachingOccurrence::whereIn('teaching_schedule_id', $scheduleIds)->delete();
+                $lecturer->teachingSchedules()->delete();
+                $lecturer->periodTargets()->delete();
+                SystemAudit::create([
+                    'user_id' => $request->user()->id, 'event' => 'LECTURER_DELETED',
+                    'entity_type' => Lecturer::class, 'entity_id' => $lecturer->id,
+                    'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+                    'old_values' => ['name' => $lecturer->name, 'schedule_count' => $scheduleIds->count()],
+                ]);
+                $lecturer->delete();
+                $locks->bump($state);
+            }, 3);
+        } catch (ValidationException $exception) {
+            return redirect()->to($redirect)->with('error', collect($exception->errors())->flatten()->first());
+        }
+
+        return redirect()->to($redirect)->with('success', 'Dosen dan jadwal mengajarnya berhasil dihapus dari direktori. Referensi identitas tetap tersimpan.');
     }
 
     /**

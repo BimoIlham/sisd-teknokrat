@@ -370,6 +370,68 @@ class SupervisorDirectoryController extends Controller
             ->with('supervisor_rotated_credential', $encryptedCredential);
     }
 
+    public function resetPassword(Request $request, Lecturer $supervisor): RedirectResponse
+    {
+        $actor = $request->user()->fresh();
+        abort_unless($actor?->is_active && $actor->hasRole('superadmin'), 403);
+        $validated = $request->validate([
+            'period_id' => ['required', 'integer', 'exists:supervision_periods,id'],
+            'confirm_email' => ['required', 'email'],
+            'confirm_reset' => ['required', 'accepted'],
+            'credential_state' => ['required', 'string', 'max:4096'],
+            'password' => ['prohibited'],
+        ]);
+        $redirect = route('lpm.supervisors.index', ['period_id' => $validated['period_id']]);
+
+        try {
+            try {
+                $selection = json_decode(Crypt::decryptString($validated['credential_state']), true, flags: JSON_THROW_ON_ERROR);
+            } catch (DecryptException|\JsonException $exception) {
+                throw ValidationException::withMessages(['credential_state' => 'Konfirmasi akun tidak valid. Muat ulang daftar supervisor.']);
+            }
+            DB::transaction(function () use ($request, $supervisor, $validated, $selection): void {
+                $locks = app(SchedulingLockService::class);
+                $locks->state();
+                $locks->period((int) $validated['period_id']);
+                $supervisor = Lecturer::whereKey($supervisor->id)->lockForUpdate()->firstOrFail();
+                $user = User::where('lecturer_id', $supervisor->id)->lockForUpdate()->firstOrFail();
+                abort_unless($user->hasRole('supervisor') && ! $user->hasRole('superadmin') && $user->id !== $request->user()->id, 403);
+                abort_unless(PeriodSupervisor::where('lecturer_id', $supervisor->id)
+                    ->where('supervision_period_id', $validated['period_id'])->where('is_active', true)->exists(), 404);
+                if (! is_array($selection)
+                    || ($selection['user_id'] ?? null) !== $user->id
+                    || ($selection['actor_id'] ?? null) !== $request->user()->id
+                    || ($selection['period_id'] ?? null) !== (int) $validated['period_id']
+                    || ! is_int($selection['expires_at'] ?? null)
+                    || $selection['expires_at'] < now()->timestamp
+                    || ! is_string($selection['password_hash'] ?? null)
+                    || ! hash_equals($user->password, $selection['password_hash'])) {
+                    throw ValidationException::withMessages(['credential_state' => 'Akun telah berubah atau konfirmasi kedaluwarsa. Muat ulang sebelum mereset password.']);
+                }
+                if (strcasecmp($user->email, $validated['confirm_email']) !== 0) {
+                    throw ValidationException::withMessages(['confirm_email' => 'Email akun telah berubah. Muat ulang daftar supervisor.']);
+                }
+                $user->update(['password' => Hash::make(self::DEFAULT_INITIAL_PASSWORD), 'must_change_password' => true]);
+                app(CredentialSessionRevoker::class)->revoke($user);
+                $this->recordSupervisorChange($request, 'SUPERVISOR_PASSWORD_RESET', $user, [
+                    'source' => 'admin_default_reset', 'period_id' => (int) $validated['period_id'],
+                    'must_change_password' => true,
+                ]);
+            }, 3);
+        } catch (ValidationException $exception) {
+            return redirect()->to($redirect)->with('error', collect($exception->errors())->flatten()->first());
+        } catch (ModelNotFoundException|HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            $error = app(UnexpectedErrorReporter::class)->report($exception, 'supervisor.password_reset');
+
+            return redirect()->to($redirect)->with('error', $error['message'])->with('error_reference', $error['reference']);
+        }
+
+        return redirect()->to($redirect)
+            ->with('success', 'Password supervisor berhasil dikembalikan ke sandi default. Supervisor wajib mengganti password saat login berikutnya.');
+    }
+
     /**
      * Revoke the selected period assignment while preserving other periods.
      */
