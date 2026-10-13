@@ -221,8 +221,9 @@ class SupervisorAssignmentLetterService
     {
         $letterhead = 'data:image/jpeg;base64,'.base64_encode((string) file_get_contents(public_path('images/supervisor-letterhead.jpeg')));
         $signature = 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('images/lpm-chair-signature.png')));
+        $stamp = 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('images/lpm-stamp.png')));
 
-        return Pdf::loadView('pdf.supervisor-assignment-letter', compact('letter', 'letterhead', 'signature'))
+        return Pdf::loadView('pdf.supervisor-assignment-letter', compact('letter', 'letterhead', 'signature', 'stamp'))
             ->setPaper('a4', 'portrait');
     }
 

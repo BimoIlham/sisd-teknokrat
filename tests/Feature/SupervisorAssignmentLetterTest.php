@@ -265,7 +265,7 @@ class SupervisorAssignmentLetterTest extends TestCase
         $this->get($this->downloadUrl())->assertOk();
     }
 
-    public function test_reference_layout_with_six_lecturers_fits_one_page_and_has_blank_signature_space(): void
+    public function test_reference_layout_with_six_lecturers_fits_one_page_with_signature_and_stamp(): void
     {
         $letter = [
             'number' => '072/LPM-UTI/X/2025', 'supervisor_name' => 'Dr. Ryan Randy Suryono, M.Kom', 'stage_no' => 1,
@@ -274,6 +274,10 @@ class SupervisorAssignmentLetterTest extends TestCase
             'groups' => [['label' => 'Offline', 'lecturers' => ['Rahmat Dedi Gunawan, M.Kom', 'Qadhli Jafar Adrian, Bmm., MIT.', 'Sigit Doni Ramdan, S.T., M.Eng.', 'Dr. Aditya Gumantan', 'Triyanto, M.Pd.', 'Dr. Afrianto, M.Pd.']]],
         ];
         $pdf = app(SupervisorAssignmentLetterService::class)->render($letter);
+        $images = $pdf->getDomPDF()->getDom()->getElementsByTagName('img');
+        $this->assertSame(3, $images->length);
+        $this->assertSame('chair-stamp', $images->item(2)->getAttribute('class'));
+        $this->assertStringStartsWith('data:image/png;base64,', $images->item(2)->getAttribute('src'));
         $contents = $pdf->output();
         $this->assertSame(1, $pdf->getDomPDF()->getCanvas()->get_page_count());
         $html = view('pdf.supervisor-assignment-letter', ['letter' => $letter, 'letterhead' => 'letterhead.jpeg'])->render();

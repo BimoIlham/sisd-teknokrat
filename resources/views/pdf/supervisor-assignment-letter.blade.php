@@ -17,8 +17,9 @@
         ol { margin: 0 0 12pt 37pt; padding: 0; }
         li { padding-left: 4pt; margin-bottom: 1.8pt; page-break-inside: avoid; }
         .signing { position: relative; margin-top: 29pt; margin-left: 211pt; width: 240pt; line-height: 1.2; page-break-inside: avoid; }
-        .signature-space { height: 61pt; }
-        .chair-signature { position: absolute; top: 30pt; left: 0; width: 110pt; height: auto; }
+        .signature-space { height: 86pt; }
+        .chair-signature { position: absolute; top: 30pt; left: 0; width: 110pt; height: auto; z-index: 1; }
+        .chair-stamp { position: absolute; top: 28pt; left: -34pt; width: 82pt; height: auto; opacity: 0.7; z-index: 2; }
         .chair-name { font-weight: bold; }
     </style>
 </head>
@@ -47,6 +48,9 @@
         <div>Ketua LPM,</div>
         @if(!empty($signature))
             <img class="chair-signature" src="{{ $signature }}" alt="Tanda tangan Ketua LPM">
+        @endif
+        @if(!empty($stamp))
+            <img class="chair-stamp" src="{{ $stamp }}" alt="Cap Lembaga Penjaminan Mutu">
         @endif
         <div class="signature-space"></div>
         <div class="chair-name">{{ $letter['chair_name'] }}</div>
