@@ -19,7 +19,7 @@
         .signing { position: relative; margin-top: 29pt; margin-left: 211pt; width: 240pt; line-height: 1.2; page-break-inside: avoid; }
         .signature-space { height: 86pt; }
         .chair-signature { position: absolute; top: 30pt; left: 0; width: 110pt; height: auto; z-index: 1; }
-        .chair-stamp { position: absolute; top: 28pt; left: -34pt; width: 82pt; height: auto; opacity: 0.7; z-index: 2; }
+        .chair-stamp { position: absolute; top: 28pt; left: -34pt; width: 82pt; height: auto; z-index: 2; }
         .chair-name { font-weight: bold; }
     </style>
 </head>
