@@ -8,9 +8,7 @@ use App\Models\FormTemplate;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\ScoringPolicy;
-use App\Models\Supervision;
-use App\Models\SystemAudit;
-use App\Services\InstrumentVersionService;
+use App\Services\InstrumentEditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,9 +28,9 @@ class InstrumentController extends Controller
             return redirect()->route('lpm.instruments.mode', $mode);
         }
 
-        $templates = FormTemplate::withCount(['sections', 'questions'])
-            ->latest('version')
-            ->get();
+        $templates = FormTemplate::where('status', 'PUBLISHED')->withCount(['sections', 'questions'])
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->get()->unique('delivery_mode');
 
         $policies = ScoringPolicy::all();
 
@@ -42,7 +40,7 @@ class InstrumentController extends Controller
     /**
      * Display separated question bank for Offline or Online mode.
      */
-    public function byMode(Request $request, string $mode): View
+    public function byMode(string $mode): View
     {
         $mode = strtolower($mode);
         abort_if(! in_array($mode, ['offline', 'online'], true), 404);
@@ -53,27 +51,19 @@ class InstrumentController extends Controller
             'sections' => fn ($q) => $q->orderBy('sort_order'),
             'sections.questions' => fn ($q) => $q->orderBy('sort_order'),
             'sections.questions.options' => fn ($q) => $q->orderBy('sort_order'),
-            'sections.questions.answers' => fn ($q) => $q->whereNotNull('notes')
-                ->where('notes', '<>', '')
-                ->whereHas('supervision', fn ($supervision) => $supervision->where('status', 'SUBMITTED'))
-                ->latest()
-                ->limit(3),
-            'sections.questions.answers.supervision.assignment.targetLecturer',
-            'sections.questions.answers.supervision.assignment.supervisionStage.period.academicTerm',
         ])
             ->where('delivery_mode', $upperMode)
-            ->when($request->filled('template'), fn ($query) => $query->whereKey($request->integer('template')))
-            ->latest('version')
+            ->where('status', 'PUBLISHED')
+            ->orderByDesc('created_at')->orderByDesc('id')
             ->firstOrFail();
 
         $offlineCount = Question::whereHas('template', fn ($q) => $q->where('delivery_mode', 'OFFLINE'))->count();
         $onlineCount = Question::whereHas('template', fn ($q) => $q->where('delivery_mode', 'ONLINE'))->count();
         $policies = ScoringPolicy::all();
 
-        $isUsed = Supervision::where('form_template_id', $template->id)->exists();
-        $versions = FormTemplate::where('delivery_mode', $upperMode)->orderByDesc('version')->get();
+        $isUsed = app(InstrumentEditService::class)->hasStartedSupervision($template->id);
 
-        return view('lpm.instruments.mode', compact('template', 'mode', 'offlineCount', 'onlineCount', 'policies', 'isUsed', 'versions'));
+        return view('lpm.instruments.mode', compact('template', 'mode', 'offlineCount', 'onlineCount', 'policies', 'isUsed'));
     }
 
     /**
@@ -81,7 +71,7 @@ class InstrumentController extends Controller
      */
     public function show(FormTemplate $template): RedirectResponse
     {
-        return redirect()->route('lpm.instruments.mode', ['mode' => strtolower($template->delivery_mode), 'template' => $template->id]);
+        return redirect()->route('lpm.instruments.mode', strtolower($template->delivery_mode));
     }
 
     /**
@@ -107,7 +97,7 @@ class InstrumentController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $template, $validated) {
-            $template = app(InstrumentVersionService::class)->lockEditable($template->id);
+            $template = app(InstrumentEditService::class)->lockEditable($template->id);
             $prefix = $template->delivery_mode === 'OFFLINE' ? 'OFF_Q' : 'ON_Q';
             $count = $template->questions()->count() + 1;
             $code = sprintf('%s%02d', $prefix, $count);
@@ -256,7 +246,7 @@ class InstrumentController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $question, $template, $validated) {
-            $template = app(InstrumentVersionService::class)->lockEditable($template->id);
+            $template = app(InstrumentEditService::class)->lockEditable($template->id);
             $question->refresh();
             $newSectionId = (int) $validated['form_section_id'];
             $newSortOrder = (int) $validated['sort_order'];
@@ -374,7 +364,7 @@ class InstrumentController extends Controller
     {
         $template = $question->template;
         DB::transaction(function () use ($question, $template) {
-            $template = app(InstrumentVersionService::class)->lockEditable($template->id);
+            $template = app(InstrumentEditService::class)->lockEditable($template->id);
             $question->options()->delete();
             $question->delete();
 
@@ -398,7 +388,7 @@ class InstrumentController extends Controller
         ]);
 
         DB::transaction(function () use ($template, $validated): void {
-            $template = app(InstrumentVersionService::class)->lockEditable($template->id);
+            $template = app(InstrumentEditService::class)->lockEditable($template->id);
             $sortOrder = $validated['sort_order'] ?? (((int) $template->sections()->max('sort_order')) + 1);
 
             $prefix = $template->delivery_mode === 'OFFLINE' ? 'SEC_OFF_' : 'SEC_ON_';
@@ -434,40 +424,11 @@ class InstrumentController extends Controller
         return redirect()->back()->with('success', "Bagian [{$validated['title']}] berhasil ditambahkan.");
     }
 
-    public function duplicate(FormTemplate $template): RedirectResponse
-    {
-        $copy = app(InstrumentVersionService::class)->duplicate($template);
-
-        return redirect()->route('lpm.instruments.show', $copy)
-            ->with('success', 'Versi baru dibuat sebagai draf. Periksa isinya lalu terbitkan untuk periode baru.');
-    }
-
-    public function publish(FormTemplate $template): RedirectResponse
-    {
-        DB::transaction(function () use ($template): void {
-            $template = app(InstrumentVersionService::class)->lockEditable($template->id);
-            $previousStatus = $template->status;
-            $template->update(['status' => 'PUBLISHED', 'published_at' => now(), 'published_by' => auth()->id()]);
-            SystemAudit::create([
-                'user_id' => auth()->id(),
-                'event' => 'INSTRUMENT_PUBLISHED',
-                'entity_type' => FormTemplate::class,
-                'entity_id' => $template->id,
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'old_values' => ['status' => $previousStatus],
-                'new_values' => ['version' => $template->version, 'status' => $template->status],
-            ]);
-        });
-
-        return redirect()->back()->with('success', 'Instrumen diterbitkan untuk periode baru. Instrumen pada periode yang sudah ada tetap digunakan.');
-    }
-
     public function updateSection(Request $request, FormSection $section): RedirectResponse
     {
         $validated = $request->validate(['title' => 'required|string|max:255', 'subtitle' => 'nullable|string', 'sort_order' => 'required|integer|min:1']);
         DB::transaction(function () use ($section, $validated): void {
-            app(InstrumentVersionService::class)->lockEditable($section->form_template_id);
+            app(InstrumentEditService::class)->lockEditable($section->form_template_id);
             $section->refresh();
             if ($section->template->sections()->whereKeyNot($section->id)->where('sort_order', $validated['sort_order'])->exists()) {
                 throw ValidationException::withMessages(['sort_order' => 'Urutan bagian sudah digunakan.']);
@@ -481,7 +442,7 @@ class InstrumentController extends Controller
     public function destroySection(FormSection $section): RedirectResponse
     {
         DB::transaction(function () use ($section): void {
-            $template = app(InstrumentVersionService::class)->lockEditable($section->form_template_id);
+            $template = app(InstrumentEditService::class)->lockEditable($section->form_template_id);
             $section->delete();
             $template->update(['expected_scored_count' => $template->questions()->where('is_scored', true)->count()]);
         });

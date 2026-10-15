@@ -1,8 +1,9 @@
 <?php
 
-use App\Models\FormTemplate;
 use App\Models\Supervision;
-use App\Services\InstrumentVersionService;
+use App\Models\SupervisionAnswer;
+use App\Services\InstrumentEditService;
+use App\Services\Scheduling\SchedulingLockService;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,15 +21,21 @@ try {
     DB::statement('SET SESSION innodb_lock_wait_timeout = 10');
     $result = DB::transaction(function () use ($job): array {
         if ($job['operation'] === 'edit') {
-            $template = app(InstrumentVersionService::class)->lockEditable($job['template_id']);
+            $template = app(InstrumentEditService::class)->lockEditable($job['template_id']);
             $template->sections()->firstOrFail()->update(['title' => 'Edited concurrently']);
 
             return ['result' => 'edited'];
         }
-        if ($job['operation'] === 'clone') {
-            $copy = app(InstrumentVersionService::class)->duplicate(FormTemplate::findOrFail($job['template_id']));
+        if ($job['operation'] === 'answer') {
+            app(SchedulingLockService::class)->state();
+            Supervision::query()->lockForUpdate()->findOrFail($job['supervision_id']);
+            SupervisionAnswer::create([
+                'supervision_id' => $job['supervision_id'],
+                'question_id' => $job['question_id'],
+                'question_option_id' => $job['option_id'],
+            ]);
 
-            return ['result' => 'cloned', 'version' => $copy->version];
+            return ['result' => 'answered'];
         }
         $supervision = Supervision::create($job['values']);
 

@@ -5,6 +5,7 @@ namespace App\Services\Supervision;
 use App\Models\Supervision;
 use App\Models\SupervisionAnswer;
 use App\Models\SupervisionEvidence;
+use App\Services\Scheduling\SchedulingLockService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,7 @@ class EvidenceService
         }
 
         return DB::transaction(function () use ($supervision, $file, $questionId): SupervisionEvidence {
+            app(SchedulingLockService::class)->state();
             $lockedSupervision = Supervision::lockForUpdate()->findOrFail($supervision->id);
             $this->access->authorizeMutation($lockedSupervision);
 
@@ -102,7 +104,9 @@ class EvidenceService
                 'validated_at' => now(),
             ]);
 
-            $lockedSupervision->increment('row_version');
+            $lockedSupervision->draft_started_at ??= now();
+            $lockedSupervision->row_version += 1;
+            $lockedSupervision->save();
 
             return $evidence->setRelation('answer', $answer->setRelation('supervision', $lockedSupervision));
         });
@@ -116,6 +120,7 @@ class EvidenceService
         $supervisionId = SupervisionEvidence::findOrFail($evidence->id)->answer()->value('supervision_id');
 
         return DB::transaction(function () use ($evidence, $supervisionId): int {
+            app(SchedulingLockService::class)->state();
             $supervision = Supervision::lockForUpdate()->findOrFail($supervisionId);
             $this->access->authorizeMutation($supervision);
             $freshEvidence = $supervision->evidence()->with('answer')->whereKey($evidence->id)->firstOrFail();

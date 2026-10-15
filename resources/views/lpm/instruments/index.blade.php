@@ -32,7 +32,6 @@
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold font-mono {{ $isOffline ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
                             {{ $isOffline ? '🏢 MODA OFFLINE' : '🌐 MODA ONLINE' }}
                         </span>
-                        <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">Versi {{ $tpl->version }}.0</span>
                     </div>
 
                     <h3 class="text-lg font-bold text-slate-900">

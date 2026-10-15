@@ -58,13 +58,13 @@ class QuestionBankCrudTest extends TestCase
 
         $responseOffline = $this->actingAs($this->admin)->get(route('lpm.instruments.mode', 'offline'));
         $responseOffline->assertStatus(200);
-        $responseOffline->assertSee('Bank Pertanyaan Supervisi (Tatap Muka / Offline)');
+        $responseOffline->assertSee('Bank Pertanyaan Supervisi (Offline)');
         $responseOffline->assertSee('OFFLINE');
         $responseOffline->assertDontSee($offlineQuestionCode);
 
         $responseOnline = $this->actingAs($this->admin)->get(route('lpm.instruments.mode', 'online'));
         $responseOnline->assertStatus(200);
-        $responseOnline->assertSee('Bank Pertanyaan Supervisi (Daring / Online)');
+        $responseOnline->assertSee('Bank Pertanyaan Supervisi (Online)');
         $responseOnline->assertSee('ONLINE');
         $responseOnline->assertDontSee($onlineQuestionCode);
     }

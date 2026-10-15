@@ -78,8 +78,6 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
     Route::post('/instruments/{template}/questions', [InstrumentController::class, 'storeQuestion'])->name('instruments.questions.store');
     Route::put('/instruments/questions/{question}', [InstrumentController::class, 'updateQuestion'])->name('instruments.questions.update');
     Route::delete('/instruments/questions/{question}', [InstrumentController::class, 'destroyQuestion'])->name('instruments.questions.destroy');
-    Route::post('/instruments/{template}/duplicate', [InstrumentController::class, 'duplicate'])->name('instruments.duplicate');
-    Route::post('/instruments/{template}/publish', [InstrumentController::class, 'publish'])->name('instruments.publish');
     Route::put('/instruments/sections/{section}', [InstrumentController::class, 'updateSection'])->name('instruments.sections.update');
     Route::delete('/instruments/sections/{section}', [InstrumentController::class, 'destroySection'])->name('instruments.sections.destroy');
     Route::post('/instruments/{template}/sections', [InstrumentController::class, 'storeSection'])->name('instruments.sections.store');

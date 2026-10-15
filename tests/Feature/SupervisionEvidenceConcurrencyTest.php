@@ -92,7 +92,7 @@ class SupervisionEvidenceConcurrencyTest extends TestCase
     }
 
     /**
-     * Use the existing MySQL barrier pattern, holding the supervision parent row instead of the scheduling mutex.
+     * Hold the supervision row while workers wait on the scheduling mutex or the parent row.
      * Both processes must visibly wait for SELECT FOR UPDATE before the parent releases its transaction.
      *
      * @param  list<array<string, int|string>>  $jobs
@@ -128,11 +128,11 @@ class SupervisionEvidenceConcurrencyTest extends TestCase
             file_put_contents($release, 'release');
             $deadline = microtime(true) + 5;
             do {
-                $waiting = (int) DB::scalar("SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = ? AND ID <> CONNECTION_ID() AND INFO LIKE '%from `supervisions`%' AND INFO LIKE '%for update%'", ['sisd_teknokrat_test']);
+                $waiting = (int) DB::scalar("SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = ? AND ID <> CONNECTION_ID() AND INFO LIKE '%for update%' AND (INFO LIKE '%scheduling_state%' OR INFO LIKE '%from `supervisions`%')", ['sisd_teknokrat_test']);
                 if ($waiting === count($jobs)) {
                     break;
                 }
-                $this->assertLessThan($deadline, microtime(true), 'Both workers must wait on the actual supervision row.');
+                $this->assertLessThan($deadline, microtime(true), 'Both workers must wait on a scheduling or supervision lock.');
                 usleep(10000);
             } while (true);
             $this->assertSame(count($jobs), $waiting);

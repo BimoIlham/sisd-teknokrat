@@ -150,4 +150,34 @@ trait CreatesSchedulingFixtures
 
         return $import;
     }
+
+    protected function legacyTemplateCopy(FormTemplate $source): FormTemplate
+    {
+        $source->load('sections.questions.options');
+        $copy = $source->replicate(['published_by', 'published_at']);
+        $copy->version = FormTemplate::where('code', $source->code)->max('version') + 1;
+        $copy->status = 'PUBLISHED';
+        $copy->save();
+
+        foreach ($source->sections as $section) {
+            $newSection = $section->replicate();
+            $newSection->form_template_id = $copy->id;
+            $newSection->save();
+
+            foreach ($section->questions as $question) {
+                $newQuestion = $question->replicate();
+                $newQuestion->form_template_id = $copy->id;
+                $newQuestion->form_section_id = $newSection->id;
+                $newQuestion->save();
+
+                foreach ($question->options as $option) {
+                    $newOption = $option->replicate();
+                    $newOption->question_id = $newQuestion->id;
+                    $newOption->save();
+                }
+            }
+        }
+
+        return $copy->unsetRelations();
+    }
 }

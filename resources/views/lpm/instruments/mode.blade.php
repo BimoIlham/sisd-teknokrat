@@ -1,4 +1,4 @@
-@extends('layouts.app', ['title' => 'Bank Pertanyaan Supervisi (' . ($mode === 'offline' ? 'Tatap Muka / Offline' : 'Daring / Online') . ')'])
+@extends('layouts.app', ['title' => 'Bank Pertanyaan Supervisi (' . ($mode === 'offline' ? 'Offline' : 'Online') . ')'])
 
 @section('content')
 <div x-data="questionBankApp()" class="space-y-8 pb-12">
@@ -12,7 +12,7 @@
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight">
-                Bank Pertanyaan Supervisi ({{ $mode === 'offline' ? 'Tatap Muka / Offline' : 'Daring / Online' }})
+                Bank Pertanyaan Supervisi ({{ $mode === 'offline' ? 'Offline' : 'Online' }})
                 <span class="sr-only">{{ strtoupper($mode) }}</span>
             </h1>
 
@@ -25,6 +25,7 @@
                     <svg class="w-3.5 h-3.5 mr-1.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                     Kebijakan Skor
                 </button>
+                @unless($isUsed)
                 <button 
                     type="button" 
                     @click="openAddSectionModal()" 
@@ -41,34 +42,16 @@
                     <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     Tambah Pertanyaan
                 </button>
+                @endunless
             </div>
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 space-y-3">
-        <p class="text-sm text-slate-700">Versi {{ $template->version }} ? {{ $template->status === 'DRAFT' ? 'Draf' : 'Diterbitkan' }}.
-            {{ $isUsed ? 'Instrumen sudah digunakan dalam penilaian. Buat versi baru untuk melakukan perubahan.' : 'Instrumen belum digunakan dan dapat diedit.' }}
-        </p>
-        <div class="flex flex-wrap items-center gap-3">
-            <form method="GET" action="{{ route('lpm.instruments.mode', $mode) }}">
-                <select name="template" aria-label="Versi instrumen" class="filter-control" onchange="this.form.submit()">
-                    @foreach($versions as $version)
-                        <option value="{{ $version->id }}" @selected($version->id === $template->id)>{{ $version->name }} ? v{{ $version->version }} ({{ $version->status }})</option>
-                    @endforeach
-                </select>
-            </form>
-            <form method="POST" action="{{ route('lpm.instruments.duplicate', $template) }}">
-                @csrf
-                <button type="submit" class="px-4 py-2 rounded-lg bg-[#7B1113] text-white text-xs font-semibold">Buat versi baru</button>
-            </form>
-            @if($template->status === 'DRAFT' && ! $isUsed)
-                <form method="POST" action="{{ route('lpm.instruments.publish', $template) }}">
-                    @csrf
-                    <button type="submit" class="px-4 py-2 rounded-lg bg-[#7B1113] text-white text-xs font-semibold">Terbitkan untuk periode baru</button>
-                </form>
-            @endif
+    @if($isUsed)
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            Instrumen sudah digunakan dalam penilaian dan tidak dapat diubah.
         </div>
-    </div>
+    @endif
 
     <!-- Alert Messages -->
     @if(session('success'))
@@ -237,6 +220,21 @@
                         <span class="text-xs font-semibold text-slate-500 bg-white px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
                             {{ $sec->questions->count() }} Butir
                         </span>
+                        @unless($isUsed)
+                        <button
+                            type="button"
+                            @click="openEditSectionModal({{ json_encode([
+                                'id' => $sec->id,
+                                'sort_order' => $sec->sort_order,
+                                'title' => $sec->title,
+                                'subtitle' => $sec->subtitle,
+                            ]) }})"
+                            class="inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 transition-colors shadow-2xs"
+                            aria-label="Edit Bagian {{ $sec->sort_order }}: {{ $sec->title }}"
+                        >
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            Edit Bagian
+                        </button>
                         <button 
                             type="button" 
                             @click="openAddModal({{ $sec->id }})" 
@@ -245,6 +243,7 @@
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                             Tambah Butir
                         </button>
+                        @endunless
                     </div>
                 </div>
 
@@ -317,6 +316,7 @@
                                     </div>
                                 </div>
 
+                                @unless($isUsed)
                                 <!-- Action Buttons: Edit and Delete -->
                                 <div class="flex items-center gap-2 shrink-0 self-end sm:self-start pt-1 sm:pt-0">
                                     <button 
@@ -357,6 +357,7 @@
                                         Hapus
                                     </button>
                                 </div>
+                                @endunless
                             </div>
 
                             <!-- Options Badges Display -->
@@ -381,21 +382,8 @@
                             @endif
 
                             <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 p-3">
-                                <p class="text-xs font-semibold text-amber-900">Catatan supervisor untuk butir ini</p>
-                                @forelse($q->answers as $answer)
-                                    <div class="mt-2 rounded-lg border border-amber-100 bg-white p-3">
-                                        <p class="whitespace-pre-line break-words text-xs text-slate-700">{{ $answer->notes }}</p>
-                                        <p class="mt-2 text-[10px] text-slate-500">
-                                            {{ $answer->supervision?->assignment?->targetLecturer?->name ?? 'Dosen' }}
-                                            · {{ $answer->supervision?->assignment?->supervisionStage?->name ?? 'Tahap supervisi' }}
-                                            @if($answer->supervision?->assignment?->supervisionStage?->period?->academicTerm)
-                                                · {{ $answer->supervision->assignment->supervisionStage->period->academicTerm->name }}
-                                            @endif
-                                        </p>
-                                    </div>
-                                @empty
-                                    <p class="mt-1 text-xs text-slate-500">Belum ada catatan dari supervisor.</p>
-                                @endforelse
+                                <p class="text-xs font-semibold text-amber-900">Catatan Opsional</p>
+                                <p class="mt-1 text-xs text-slate-600">Supervisor dapat mengisi catatan tambahan untuk butir ini saat melakukan supervisi.</p>
                             </div>
                         </div>
                     @empty
@@ -408,9 +396,11 @@
                 <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 <h3 class="text-base font-bold text-slate-800">Belum Ada Bagian & Pertanyaan</h3>
                 <p class="text-xs sm:text-sm text-slate-500 mt-1">Mulai dengan menambahkan bagian atau butir pertanyaan baru.</p>
+                @unless($isUsed)
                 <button type="button" @click="openAddSectionModal()" class="mt-5 inline-flex items-center px-5 py-2.5 rounded-xl bg-[#7B1113] text-white text-xs font-semibold shadow-xs hover:bg-[#600d0e] transition-colors">
                     Tambah Bagian Pertama
                 </button>
+                @endunless
             </div>
         @endforelse
     </div>
@@ -825,6 +815,66 @@
         </div>
     </div>
 
+    @unless($isUsed)
+    <!-- ========================================== -->
+    <!-- MODAL: EDIT BAGIAN / SESI                  -->
+    <!-- ========================================== -->
+    <div
+        x-show="editSectionModalOpen"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        aria-labelledby="modal-edit-section-title"
+        role="dialog"
+        aria-modal="true"
+    >
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div
+                x-show="editSectionModalOpen"
+                @click="closeEditSectionModal()"
+                class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            ></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div
+                x-show="editSectionModalOpen"
+                class="relative z-10 inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-200"
+            >
+                <form :action="'{{ url('lpm/instruments/sections') }}/' + editSectionData.id" method="POST">
+                    @csrf
+                    @method('PUT')
+                    <div class="p-6 sm:p-7 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-900" id="modal-edit-section-title">Edit Bagian / Sesi</h3>
+                        <button type="button" @click="closeEditSectionModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg p-1" aria-label="Tutup edit bagian">&times;</button>
+                    </div>
+
+                    <div class="p-6 sm:p-7 space-y-5 text-xs sm:text-sm">
+                        <div>
+                            <label for="edit-section-sort-order" class="block font-semibold text-slate-700 mb-1.5">Nomor Urutan <span class="text-red-500">*</span></label>
+                            <input id="edit-section-sort-order" type="number" name="sort_order" x-model="editSectionData.sort_order" required min="1" class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 p-3 focus:ring-2 focus:ring-[#7B1113]/20 focus:border-[#7B1113]">
+                        </div>
+
+                        <div>
+                            <label for="edit-section-title" class="block font-semibold text-slate-700 mb-1.5">Judul Bagian / Sesi <span class="text-red-500">*</span></label>
+                            <input id="edit-section-title" type="text" name="title" x-model="editSectionData.title" required maxlength="255" class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 p-3 focus:ring-2 focus:ring-[#7B1113]/20 focus:border-[#7B1113]">
+                        </div>
+
+                        <div>
+                            <label for="edit-section-subtitle" class="block font-semibold text-slate-700 mb-1.5">Keterangan / Subtitle <span class="text-slate-400 font-normal">(Opsional)</span></label>
+                            <textarea id="edit-section-subtitle" name="subtitle" x-model="editSectionData.subtitle" rows="2" class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 p-3 focus:ring-2 focus:ring-[#7B1113]/20 focus:border-[#7B1113]"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+                        <button type="button" @click="closeEditSectionModal()" class="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors">Batal</button>
+                        <button type="submit" class="px-6 py-2.5 rounded-xl bg-[#7B1113] hover:bg-[#600d0e] text-white text-xs font-semibold shadow-xs transition-colors">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endunless
+
     <!-- ========================================== -->
     <!-- MODAL 5: KEBIJAKAN SKOR TERDAFTAR (D02)   -->
     <!-- ========================================== -->
@@ -921,10 +971,11 @@ function questionBankApp() {
         editModalOpen: false,
         deleteModalOpen: false,
         addSectionModalOpen: false,
+        editSectionModalOpen: false,
         showPoliciesModal: false,
 
         get anyModalOpen() {
-            return this.addModalOpen || this.editModalOpen || this.deleteModalOpen || this.addSectionModalOpen || this.showPoliciesModal;
+            return this.addModalOpen || this.editModalOpen || this.deleteModalOpen || this.addSectionModalOpen || this.editSectionModalOpen || this.showPoliciesModal;
         },
 
         toggleBodyScroll() {
@@ -964,6 +1015,13 @@ function questionBankApp() {
         deleteData: {
             id: null,
             question_text: ''
+        },
+
+        editSectionData: {
+            id: null,
+            sort_order: 1,
+            title: '',
+            subtitle: ''
         },
 
         resetFilters() {
@@ -1020,6 +1078,22 @@ function questionBankApp() {
 
         closeAddSectionModal() {
             this.addSectionModalOpen = false;
+            this.toggleBodyScroll();
+        },
+
+        openEditSectionModal(section) {
+            this.editSectionData = {
+                id: section.id,
+                sort_order: section.sort_order,
+                title: section.title,
+                subtitle: section.subtitle || ''
+            };
+            this.editSectionModalOpen = true;
+            this.toggleBodyScroll();
+        },
+
+        closeEditSectionModal() {
+            this.editSectionModalOpen = false;
             this.toggleBodyScroll();
         },
 

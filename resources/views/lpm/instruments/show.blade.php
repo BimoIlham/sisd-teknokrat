@@ -11,7 +11,7 @@
             </div>
             <h1 class="text-2xl font-bold text-slate-900">{{ $template->name }}</h1>
             <p class="text-xs text-slate-500 mt-0.5">
-                Versi: <strong>{{ $template->version }}.0</strong> | Moda Pelaksanaan: <strong>{{ $template->delivery_mode === 'OFFLINE' ? 'Tatap Muka (Offline)' : 'Daring (Online / SPADA)' }}</strong>
+                Moda Pelaksanaan: <strong>{{ $template->delivery_mode === 'OFFLINE' ? 'Tatap Muka (Offline)' : 'Daring (Online / SPADA)' }}</strong>
             </p>
         </div>
     </div>

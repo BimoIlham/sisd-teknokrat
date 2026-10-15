@@ -151,9 +151,31 @@ class ScheduleImportTest extends TestCase
         ]);
 
         $response->assertRedirect(route('lpm.import.index'))
-            ->assertSessionHas('error', 'Tidak ada baris jadwal yang cukup jelas untuk diaktifkan. Pastikan PDF dan direktori dosen sudah benar.');
+            ->assertSessionHas('error', 'Tidak ada baris jadwal yang dapat diaktifkan. 1 baris tidak cocok dengan dosen aktif di Direktori Dosen; 1 baris memiliki hasil pembacaan PDF yang kurang yakin.');
         $this->assertSame(0, TeachingSchedule::count());
         $this->assertSame('PENDING_REVIEW', ScheduleImport::sole()->status);
+    }
+
+    public function test_pdf_upload_explains_when_all_rows_have_invalid_schedule_fields(): void
+    {
+        Storage::fake('local');
+        $payload = array_replace($this->validOnlinePayload(), ['start_time' => null, 'end_time' => null]);
+        $this->createImportLecturer($payload['lecturer_name']);
+        Http::fake(['*' => Http::response([
+            'parser' => ['version' => '1.1.0'],
+            'rows' => [['confidence' => 0.98, 'normalized' => $payload]],
+            'page_count' => 1,
+        ])]);
+
+        $response = $this->from(route('lpm.import.index'))->actingAs($this->admin)->post(route('lpm.import.store'), [
+            'academic_term_id' => $this->term->id,
+            'schedule_pdf' => UploadedFile::fake()->createWithContent('jadwal-tanpa-jam.pdf', '%PDF-1.7 missing-time'),
+        ]);
+
+        $response->assertRedirect(route('lpm.import.index'))
+            ->assertSessionHas('error', 'Tidak ada baris jadwal yang dapat diaktifkan. 1 baris memiliki data jadwal yang tidak lengkap atau tidak valid.');
+        $this->assertSame(0, TeachingSchedule::count());
+        $this->assertSame('INVALID', ScheduleImport::sole()->rows()->sole()->validation_status);
     }
 
     public function test_import_page_shows_only_semester_and_academic_year_in_the_active_period_card(): void

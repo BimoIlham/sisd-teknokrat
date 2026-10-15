@@ -85,8 +85,23 @@ class ScheduleCommitService
             }
 
             if ($rows->isEmpty()) {
+                $unmatchedCount = $pendingRows->filter(fn (ScheduleImportRow $row): bool => ! $row->matched_lecturer_id
+                    || $row->matchedLecturer?->is_active !== true)->count();
+                $invalidCount = $pendingRows->where('validation_status', 'INVALID')->count();
+                $uncertainCount = $pendingRows->filter(fn (ScheduleImportRow $row): bool => (float) $row->parser_confidence < 0.85)->count();
+                $reasons = [];
+                if ($unmatchedCount > 0) {
+                    $reasons[] = "{$unmatchedCount} baris tidak cocok dengan dosen aktif di Direktori Dosen";
+                }
+                if ($invalidCount > 0) {
+                    $reasons[] = "{$invalidCount} baris memiliki data jadwal yang tidak lengkap atau tidak valid";
+                }
+                if ($uncertainCount > 0) {
+                    $reasons[] = "{$uncertainCount} baris memiliki hasil pembacaan PDF yang kurang yakin";
+                }
+
                 throw ValidationException::withMessages([
-                    'import' => ['Tidak ada baris jadwal yang cukup jelas untuk diaktifkan. Pastikan PDF dan direktori dosen sudah benar.'],
+                    'import' => ['Tidak ada baris jadwal yang dapat diaktifkan. '.($reasons ? implode('; ', $reasons).'.' : 'Periksa PDF dan Direktori Dosen.')],
                 ]);
             }
 

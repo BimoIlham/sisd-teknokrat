@@ -4,9 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\FormTemplate;
 use App\Models\Supervision;
+use App\Models\SupervisionAnswer;
 use App\Models\SupervisionAssignment;
-use App\Models\SupervisionPeriod;
-use App\Services\InstrumentVersionService;
 use App\Services\Reporting\SupervisionResultPdfService;
 use App\Services\Scheduling\PeriodAssignmentPairService;
 use App\Services\Supervision\DraftService;
@@ -16,6 +15,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -68,8 +68,11 @@ class InstrumentHistoryTest extends TestCase
         $this->assertSame('Redaksi diubah', $question->fresh()->question_text);
         $this->assertSame('Label diubah', $question->options()->firstOrFail()->label);
         $section = $question->section;
-        $this->putJson(route('lpm.instruments.sections.update', $section), ['title' => 'Bagian baru', 'sort_order' => 2])->assertRedirect();
+        $this->putJson(route('lpm.instruments.sections.update', $section), [
+            'title' => 'Bagian baru', 'subtitle' => 'Keterangan baru', 'sort_order' => 2,
+        ])->assertRedirect();
         $this->assertSame('Bagian baru', $section->fresh()->title);
+        $this->assertSame('Keterangan baru', $section->fresh()->subtitle);
         $this->assertSame(2, $section->fresh()->sort_order);
         $this->postJson(route('lpm.instruments.sections.store', $template), ['title' => 'Tambahan'])->assertRedirect();
         $this->postJson(route('lpm.instruments.questions.store', $template), [
@@ -79,6 +82,65 @@ class InstrumentHistoryTest extends TestCase
         $this->deleteJson(route('lpm.instruments.sections.destroy', $section))->assertRedirect();
         $this->assertDatabaseMissing('questions', ['id' => $question->id]);
         $this->assertDatabaseMissing('form_sections', ['id' => $section->id]);
+    }
+
+    public function test_unstarted_draft_keeps_the_question_bank_editable(): void
+    {
+        $supervision = $this->supervision();
+        $question = $supervision->formTemplate->questions()->firstOrFail();
+
+        $this->get(route('lpm.instruments.mode', 'offline'))
+            ->assertOk()
+            ->assertSee('Tambah Pertanyaan')
+            ->assertSee('aria-label="Edit Bagian', false)
+            ->assertSee('Edit Bagian / Sesi')
+            ->assertDontSee('Instrumen sudah digunakan dalam penilaian dan tidak dapat diubah.');
+        $this->putJson(route('lpm.instruments.questions.update', $question), $this->questionPayload())
+            ->assertRedirect();
+
+        $this->assertSame('Redaksi diubah', $question->fresh()->question_text);
+        $this->assertSame('DRAFT', $supervision->fresh()->status);
+        $this->assertSame(0, $supervision->answers()->count());
+    }
+
+    public function test_first_saved_draft_locks_the_question_bank(): void
+    {
+        $supervision = $this->supervision();
+        $question = $supervision->formTemplate->questions()->firstOrFail();
+        $option = $question->options()->firstOrFail();
+
+        $this->actingAs($this->supervisorUser);
+        app(DraftService::class)->saveDraft($supervision, [$question->id => $option->id], 1);
+
+        $this->assertNotNull($supervision->fresh()->draft_started_at);
+        $this->actingAs($this->admin);
+        $this->putJson(route('lpm.instruments.questions.update', $question), $this->questionPayload())
+            ->assertUnprocessable()->assertJsonValidationErrors('instrument');
+    }
+
+    public function test_deleting_the_last_evidence_does_not_unlock_the_question_bank(): void
+    {
+        $supervision = $this->supervision();
+        $question = $supervision->formTemplate->questions()->firstOrFail();
+        $fileQuestion = $question->section->questions()->create([
+            'form_template_id' => $supervision->form_template_id,
+            'code' => 'FILE-LOCK',
+            'question_text' => 'Bukti supervisi',
+            'question_type' => 'FILE',
+            'is_required' => false,
+            'is_scored' => false,
+            'sort_order' => 2,
+        ]);
+
+        $this->actingAs($this->supervisorUser);
+        $evidence = app(EvidenceService::class)->storeEvidence($supervision, UploadedFile::fake()->image('bukti.jpg'), $fileQuestion->id);
+        app(EvidenceService::class)->deleteEvidence($evidence);
+
+        $this->assertSame(0, $supervision->answers()->count());
+        $this->assertNotNull($supervision->fresh()->draft_started_at);
+        $this->actingAs($this->admin);
+        $this->putJson(route('lpm.instruments.questions.update', $question), $this->questionPayload())
+            ->assertUnprocessable()->assertJsonValidationErrors('instrument');
     }
 
     #[TestWith(['question'])]
@@ -92,11 +154,16 @@ class InstrumentHistoryTest extends TestCase
     #[TestWith(['add_section'])]
     #[TestWith(['edit_section'])]
     #[TestWith(['delete_section'])]
-    public function test_used_instrument_rejects_direct_mutation_without_any_answers(string $operation): void
+    public function test_started_supervision_blocks_question_bank_changes(string $operation): void
     {
         $supervision = $this->supervision();
         $template = $this->instrument->formTemplate;
         $question = $template->questions()->firstOrFail();
+        SupervisionAnswer::create([
+            'supervision_id' => $supervision->id,
+            'question_id' => $question->id,
+            'question_option_id' => $question->options()->firstOrFail()->id,
+        ]);
         $section = $question->section;
         $before = $template->load('sections.questions.options')->toArray();
         $payload = $this->questionPayload();
@@ -119,7 +186,7 @@ class InstrumentHistoryTest extends TestCase
         };
         $response->assertUnprocessable()->assertJsonValidationErrors('instrument');
         $this->assertSame($before, $template->fresh()->load('sections.questions.options')->toArray());
-        $this->assertSame(0, $supervision->answers()->count());
+        $this->assertSame(1, $supervision->answers()->count());
     }
 
     public function test_submitted_instrument_is_protected_and_html_shows_a_clear_message(): void
@@ -127,82 +194,57 @@ class InstrumentHistoryTest extends TestCase
         $supervision = $this->supervision();
         $supervision->update(['status' => 'SUBMITTED']);
         $question = $supervision->formTemplate->questions()->firstOrFail();
+        SupervisionAnswer::create([
+            'supervision_id' => $supervision->id,
+            'question_id' => $question->id,
+            'notes' => 'Temuan khusus untuk dosen ini.',
+        ]);
         $this->from(route('lpm.instruments.show', $supervision->formTemplate))
             ->put(route('lpm.instruments.questions.update', $question), $this->questionPayload())
             ->assertSessionHasErrors('instrument');
         $this->get(route('lpm.instruments.mode', ['mode' => 'offline', 'template' => $supervision->form_template_id]))
-            ->assertOk()->assertSee('Buat versi baru')->assertSee('Instrumen sudah digunakan dalam penilaian.');
+            ->assertOk()->assertSee('Instrumen sudah digunakan dalam penilaian dan tidak dapat diubah.')
+            ->assertSee('Catatan Opsional')
+            ->assertDontSee('Temuan khusus untuk dosen ini.')
+            ->assertDontSee('Belum ada catatan dari supervisor.')
+            ->assertDontSee('aria-label="Edit Bagian', false)
+            ->assertDontSee('Edit Bagian / Sesi')
+            ->assertDontSee('Buat versi baru');
     }
 
-    public function test_clone_copies_full_instrument_with_new_ids_and_can_be_edited(): void
+    public function test_version_controls_and_actions_are_removed(): void
     {
         $source = $this->instrument->formTemplate;
+        $current = $this->legacyTemplateCopy($source);
+
+        $this->get(route('lpm.instruments.mode', ['mode' => 'offline', 'template' => $source->id]))
+            ->assertOk()
+            ->assertViewHas('template', fn ($template): bool => $template->id === $current->id)
+            ->assertDontSee('Versi instrumen')
+            ->assertDontSee('Buat versi baru');
+
+        $this->assertFalse(Route::has('lpm.instruments.duplicate'));
+        $this->assertFalse(Route::has('lpm.instruments.publish'));
+        $templateCount = FormTemplate::count();
+        $this->post("/lpm/instruments/{$source->id}/duplicate")->assertNotFound();
+        $this->post("/lpm/instruments/{$source->id}/publish")->assertNotFound();
+        $this->assertSame($templateCount, FormTemplate::count());
+
         $question = $source->questions()->firstOrFail();
-        $question->update(['help_text' => 'Petunjuk asli', 'validation_rules' => ['max_files' => 1], 'conditional_rule' => ['key' => 'value'], 'source_reference' => ['page' => 1]]);
-        $supervision = $this->supervision();
-        $this->post(route('lpm.instruments.duplicate', $source))->assertRedirect();
-        $copy = FormTemplate::where('code', $source->code)->latest('version')->firstOrFail();
-        $this->assertSame(2, $copy->version);
-        $this->assertSame('DRAFT', $copy->status);
-        $this->assertNotSame($source->id, $copy->id);
-        $copiedQuestion = $copy->questions()->firstOrFail();
-        $this->assertNotSame($question->id, $copiedQuestion->id);
-        $this->assertNotSame($question->form_section_id, $copiedQuestion->form_section_id);
-        $this->assertSame($question->only(['code', 'question_text', 'help_text', 'question_type', 'is_scored', 'is_required', 'sort_order', 'validation_rules', 'conditional_rule', 'source_reference']), $copiedQuestion->only(['code', 'question_text', 'help_text', 'question_type', 'is_scored', 'is_required', 'sort_order', 'validation_rules', 'conditional_rule', 'source_reference']));
-        $this->assertNotSame($question->options()->first()->id, $copiedQuestion->options()->first()->id);
-        $this->assertSame($question->options()->first()->only(['value', 'numeric_score', 'label', 'sort_order']), $copiedQuestion->options()->first()->only(['value', 'numeric_score', 'label', 'sort_order']));
-        $payload = $this->questionPayload();
-        $payload['form_section_id'] = $copiedQuestion->form_section_id;
-        $payload['options'][0]['id'] = $copiedQuestion->options()->first()->id;
-        $this->putJson(route('lpm.instruments.questions.update', $copiedQuestion), $payload)->assertRedirect();
-        $this->assertSame('Redaksi diubah', $copiedQuestion->fresh()->question_text);
-        $this->assertSame('Pengamatan pengujian', $question->fresh()->question_text);
-        $this->assertSame($source->id, $supervision->fresh()->form_template_id);
+        $this->putJson(route('lpm.instruments.questions.update', $question), $this->questionPayload())
+            ->assertUnprocessable()->assertJsonValidationErrors('instrument');
     }
 
     public function test_existing_draft_keeps_its_binding_after_stage_instrument_changes(): void
     {
         $supervision = $this->supervision();
         $sourceId = $supervision->form_template_id;
-        $copy = app(InstrumentVersionService::class)->duplicate($supervision->formTemplate);
+        $copy = $this->legacyTemplateCopy($supervision->formTemplate);
         $this->instrument->update(['form_template_id' => $copy->id]);
         app(PeriodAssignmentPairService::class)->refreshSupervision($supervision->assignment, $this->occurrence);
         $this->assertSame($sourceId, $supervision->fresh()->form_template_id);
         $this->expectException(ValidationException::class);
         $supervision->update(['form_template_id' => $copy->id]);
-    }
-
-    public function test_new_period_uses_published_version_and_keeps_old_stage_bindings(): void
-    {
-        $source = $this->instrument->formTemplate;
-        $source->update(['code' => 'DEMO_OFFLINE']);
-        $copy = app(InstrumentVersionService::class)->duplicate($source);
-        $this->post(route('lpm.instruments.publish', $copy))->assertRedirect();
-        $this->post(route('lpm.periods.store'), [
-            'name' => 'Periode baru F14', 'status' => 'CLOSED', 'academic_year' => '2032/2033', 'semester' => 'GANJIL',
-            'stage_1_starts_on' => '2032-10-01', 'stage_1_ends_on' => '2032-10-31',
-            'stage_2_starts_on' => '2033-01-01', 'stage_2_ends_on' => '2033-01-31',
-        ])->assertRedirect()->assertSessionHasNoErrors();
-        $period = SupervisionPeriod::where('name', 'Periode baru F14')->firstOrFail();
-        $this->assertSame($copy->id, $period->stages()->firstOrFail()->instruments()->where('delivery_mode', 'OFFLINE')->firstOrFail()->form_template_id);
-        $this->assertSame($source->id, $this->instrument->fresh()->form_template_id);
-        $this->instrument->update(['form_template_id' => $copy->id]);
-        $this->assertSame($copy->id, $this->supervision()->form_template_id);
-    }
-
-    public function test_unpublished_version_is_not_selected_for_new_periods(): void
-    {
-        $source = $this->instrument->formTemplate;
-        $source->update(['code' => 'DEMO_OFFLINE']);
-        $copy = app(InstrumentVersionService::class)->duplicate($source);
-        $this->post(route('lpm.periods.store'), [
-            'name' => 'Periode sebelum publikasi', 'status' => 'CLOSED', 'academic_year' => '2032/2033', 'semester' => 'GANJIL',
-            'stage_1_starts_on' => '2032-10-01', 'stage_1_ends_on' => '2032-10-31',
-            'stage_2_starts_on' => '2033-01-01', 'stage_2_ends_on' => '2033-01-31',
-        ])->assertRedirect()->assertSessionHasNoErrors();
-        $period = SupervisionPeriod::where('name', 'Periode sebelum publikasi')->firstOrFail();
-        $this->assertSame($source->id, $period->stages()->firstOrFail()->instruments()->where('delivery_mode', 'OFFLINE')->firstOrFail()->form_template_id);
-        $this->assertSame('DRAFT', $copy->fresh()->status);
     }
 
     public function test_final_snapshot_and_both_reports_survive_master_changes(): void
@@ -277,7 +319,7 @@ class InstrumentHistoryTest extends TestCase
         $this->actingAs($this->supervisorUser);
         $this->answerSupervision($first);
         $first = app(SubmitService::class)->submit($first, $this->supervisorUser, 1);
-        $copy = app(InstrumentVersionService::class)->duplicate($first->formTemplate);
+        $copy = $this->legacyTemplateCopy($first->formTemplate);
         $copy->questions()->firstOrFail()->options()->firstOrFail()->update(['label' => 'Hasil khusus T2', 'numeric_score' => 4]);
         $instrument = $this->secondStage->instruments()->firstOrFail();
         $instrument->update(['form_template_id' => $copy->id]);

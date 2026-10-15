@@ -5,6 +5,7 @@ namespace App\Services\Supervision;
 use App\Models\Question;
 use App\Models\Supervision;
 use App\Models\SupervisionAnswer;
+use App\Services\Scheduling\SchedulingLockService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -25,6 +26,7 @@ class DraftService
     public function saveDraft(Supervision $supervision, array $answers, int $expectedRowVersion, array $notes = []): array
     {
         return DB::transaction(function () use ($supervision, $answers, $expectedRowVersion, $notes) {
+            app(SchedulingLockService::class)->state();
             // Optimistic concurrency check
             $currentSupervision = Supervision::with('assignment.supervisionStage.period')
                 ->lockForUpdate()
@@ -138,6 +140,7 @@ class DraftService
                     ['supervision_id', 'question_id'],
                     ['question_option_id', 'boolean_value', 'text_value', 'numeric_score', 'notes', 'evaluation_notes', 'updated_at']
                 );
+                $currentSupervision->draft_started_at ??= $now;
             }
 
             $currentSupervision->row_version += 1;

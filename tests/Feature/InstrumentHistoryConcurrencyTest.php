@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\FormTemplate;
 use App\Models\Supervision;
+use App\Models\SupervisionAnswer;
 use App\Models\SupervisionAssignment;
-use App\Services\InstrumentVersionService;
+use App\Services\InstrumentEditService;
 use App\Services\Scheduling\SchedulingLockService;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
@@ -66,7 +66,7 @@ class InstrumentHistoryConcurrencyTest extends TestCase
 
     #[TestWith([true])]
     #[TestWith([false])]
-    public function test_creation_and_edit_are_serialized_in_both_orders(bool $creationFirst): void
+    public function test_unstarted_supervision_creation_does_not_block_editing_in_either_order(bool $creationFirst): void
     {
         $assignment = SupervisionAssignment::create([
             'supervision_stage_id' => $this->stage->id, 'target_lecturer_id' => $this->target->id,
@@ -84,15 +84,15 @@ class InstrumentHistoryConcurrencyTest extends TestCase
             if ($creationFirst) {
                 Supervision::create($values);
             } else {
-                app(InstrumentVersionService::class)->lockEditable($this->instrument->form_template_id)
+                app(InstrumentEditService::class)->lockEditable($this->instrument->form_template_id)
                     ->sections()->firstOrFail()->update(['title' => 'Edited before first use']);
             }
             DB::commit();
             $this->assertSame(0, $worker->wait());
             $result = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
-            $this->assertSame($creationFirst ? 'rejected' : 'created', $result['result']);
+            $this->assertSame($creationFirst ? 'edited' : 'created', $result['result']);
             $this->assertSame(1, Supervision::where('form_template_id', $this->instrument->form_template_id)->count());
-            $this->assertSame($creationFirst ? 'Pengamatan' : 'Edited before first use', $this->instrument->formTemplate->sections()->firstOrFail()->title);
+            $this->assertSame($creationFirst ? 'Edited concurrently' : 'Edited before first use', $this->instrument->formTemplate->sections()->firstOrFail()->title);
             if (! $creationFirst) {
                 $this->assertSame('Edited before first use', $result['title']);
             }
@@ -106,37 +106,52 @@ class InstrumentHistoryConcurrencyTest extends TestCase
         }
     }
 
-    public function test_parallel_clones_get_distinct_complete_versions(): void
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_first_saved_answer_and_edit_are_serialized_in_both_orders(bool $answerFirst): void
     {
+        $assignment = SupervisionAssignment::create([
+            'supervision_stage_id' => $this->stage->id, 'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id, 'teaching_occurrence_id' => $this->occurrence->id,
+            'status' => 'DRAFT', 'assignment_type' => 'MANUAL',
+        ]);
+        $supervision = Supervision::create([
+            'supervision_assignment_id' => $assignment->id, 'stage_instrument_id' => $this->instrument->id,
+            'form_template_id' => $this->instrument->form_template_id, 'scoring_policy_id' => $this->instrument->scoring_policy_id,
+            'status' => 'DRAFT', 'row_version' => 1,
+        ]);
+        $question = $this->instrument->formTemplate->questions()->firstOrFail();
+        $option = $question->options()->firstOrFail();
+        $job = ['operation' => $answerFirst ? 'edit' : 'answer', 'template_id' => $this->instrument->form_template_id,
+            'supervision_id' => $supervision->id, 'question_id' => $question->id, 'option_id' => $option->id];
+
         DB::beginTransaction();
         app(SchedulingLockService::class)->state();
-        $workers = [$this->worker(['operation' => 'clone', 'template_id' => $this->instrument->form_template_id]),
-            $this->worker(['operation' => 'clone', 'template_id' => $this->instrument->form_template_id])];
+        $worker = $this->worker($job);
         try {
-            $this->awaitBlockedWorkers(2);
+            $this->awaitBlockedWorkers(1);
+            if ($answerFirst) {
+                SupervisionAnswer::create([
+                    'supervision_id' => $supervision->id, 'question_id' => $question->id,
+                    'question_option_id' => $option->id,
+                ]);
+            } else {
+                app(InstrumentEditService::class)->lockEditable($this->instrument->form_template_id)
+                    ->sections()->firstOrFail()->update(['title' => 'Edited before first answer']);
+            }
             DB::commit();
-            $versions = [];
-            foreach ($workers as $worker) {
-                $this->assertSame(0, $worker->wait());
-                $result = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
-                $this->assertSame('cloned', $result['result']);
-                $versions[] = $result['version'];
-            }
-            sort($versions);
-            $this->assertSame([2, 3], $versions);
-            $copies = FormTemplate::where('code', $this->instrument->formTemplate->code)->where('version', '>', 1)->get();
-            foreach ($copies as $copy) {
-                $this->assertSame(1, $copy->sections()->count());
-                $this->assertSame(1, $copy->questions()->firstOrFail()->options()->count());
-            }
+
+            $this->assertSame(0, $worker->wait());
+            $result = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame($answerFirst ? 'rejected' : 'answered', $result['result']);
+            $this->assertSame(1, $supervision->answers()->count());
+            $this->assertSame($answerFirst ? 'Pengamatan' : 'Edited before first answer', $question->section->fresh()->title);
         } finally {
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
-            foreach ($workers as $worker) {
-                if ($worker->isRunning()) {
-                    $worker->stop(1);
-                }
+            if ($worker->isRunning()) {
+                $worker->stop(1);
             }
         }
     }

@@ -33,6 +33,7 @@ class Supervision extends Model
         'submission_snapshot',
         'submitted_by',
         'submitted_at',
+        'draft_started_at',
         'row_version',
     ];
 
@@ -46,6 +47,7 @@ class Supervision extends Model
         'final_score' => 'decimal:6',
         'submission_snapshot' => 'array',
         'submitted_at' => 'datetime',
+        'draft_started_at' => 'datetime',
         'row_version' => 'integer',
     ];
 

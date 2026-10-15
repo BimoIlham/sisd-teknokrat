@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\FormTemplate;
 use App\Models\Question;
 use App\Models\StageInstrument;
 use App\Models\Supervision;
@@ -10,7 +9,6 @@ use App\Models\SupervisionAssignment;
 use App\Models\SupervisionStage;
 use App\Models\TeachingOccurrence;
 use App\Models\User;
-use App\Services\InstrumentVersionService;
 use App\Services\Reporting\SupervisionResultPdfService;
 use App\Services\Reporting\SupervisorNoteClassifier;
 use App\Services\Supervision\DraftService;
@@ -28,7 +26,7 @@ use Tests\TestCase;
 
 class StructuredEvaluationNotesTest extends TestCase
 {
-    use DatabaseTransactions;
+    use CreatesSchedulingFixtures, DatabaseTransactions;
 
     protected function setUp(): void
     {
@@ -122,20 +120,6 @@ class StructuredEvaluationNotesTest extends TestCase
         $this->assertSame('suggestion', $classifier->classify('Tambahkan video pembelajaran.', 'suggestion')[0]['status']);
     }
 
-    public function test_upgrade_creates_new_versions_and_is_idempotent(): void
-    {
-        $admin = User::role('superadmin')->firstOrFail();
-        $source = FormTemplate::where('status', 'PUBLISHED')->where('delivery_mode', 'OFFLINE')->firstOrFail();
-        $this->artisan('instruments:upgrade-evaluation-notes', ['--admin' => $admin->id])->assertSuccessful();
-        $copy = FormTemplate::where('code', $source->code)->latest('version')->firstOrFail();
-        $this->assertGreaterThan($source->version, $copy->version);
-        $this->assertTrue($copy->questions()->where('question_type', 'TEXTAREA')->firstOrFail()->usesStructuredEvaluation());
-        $this->assertFalse($source->questions()->where('question_type', 'TEXTAREA')->firstOrFail()->usesStructuredEvaluation());
-        $count = FormTemplate::count();
-        $this->artisan('instruments:upgrade-evaluation-notes', ['--admin' => $admin->id])->assertSuccessful();
-        $this->assertSame($count, FormTemplate::count());
-    }
-
     /** @return array{User, Supervision, Question} */
     private function evaluation(bool $structured = true): array
     {
@@ -145,7 +129,7 @@ class StructuredEvaluationNotesTest extends TestCase
         $stage->update(['status' => 'FINALIZED', 'starts_on' => now('Asia/Jakarta')->subDay(), 'ends_on' => now('Asia/Jakarta')->addDay()]);
         $occurrence = TeachingOccurrence::with('schedule')->whereHas('schedule', fn ($query) => $query->where('lecturer_id', '<>', $user->lecturer_id))->firstOrFail();
         $instrument = StageInstrument::where('supervision_stage_id', $stage->id)->firstOrFail();
-        $template = app(InstrumentVersionService::class)->duplicate($instrument->formTemplate);
+        $template = $this->legacyTemplateCopy($instrument->formTemplate);
         $question = $template->questions()->where('question_type', 'TEXTAREA')->firstOrFail();
         $question->update(['is_required' => true, 'validation_rules' => ['evaluation_notes' => $structured]]);
         $assignment = SupervisionAssignment::create([
