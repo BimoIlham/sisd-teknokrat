@@ -309,4 +309,22 @@ class WorkspacePerformanceTest extends TestCase
             'ends_at' => Carbon::parse($date.' 09:40', 'Asia/Jakarta')->utc(), 'status' => 'SCHEDULED',
         ]);
     }
+
+    public function test_admin_can_toggle_target_scope_to_exclude_and_include_lecturer(): void
+    {
+        $target = $this->lecturers->first();
+        $this->assertSame('INCLUDED', PeriodTarget::where('supervision_period_id', $this->period->id)->where('lecturer_id', $target->id)->value('scope_status'));
+
+        $this->post(route('lpm.assignments.toggle_scope', [$this->stage, $target]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('EXCLUDED', PeriodTarget::where('supervision_period_id', $this->period->id)->where('lecturer_id', $target->id)->value('scope_status'));
+
+        $this->post(route('lpm.assignments.toggle_scope', [$this->stage, $target]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('INCLUDED', PeriodTarget::where('supervision_period_id', $this->period->id)->where('lecturer_id', $target->id)->value('scope_status'));
+    }
 }

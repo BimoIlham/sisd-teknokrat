@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lpm;
 
 use App\Http\Controllers\Controller;
+use App\Models\AssignmentAudit;
 use App\Models\Course;
 use App\Models\Faculty;
 use App\Models\GeneratedDocument;
@@ -224,14 +225,52 @@ class LecturerDirectoryController extends Controller
                 if ($lecturer->user()->exists() || $lecturer->periodSupervisors()->exists()) {
                     throw ValidationException::withMessages(['lecturer' => 'Dosen memiliki akun atau riwayat penetapan supervisor sehingga tidak dapat dihapus dari direktori.']);
                 }
-                if ($lecturer->assignmentsAsTarget()->exists() || $lecturer->assignmentsAsSupervisor()->exists()
-                    || GeneratedDocument::where('supervisor_lecturer_id', $lecturer->id)->exists()) {
+
+                $hasProtectedAssignments = $lecturer->assignmentsAsTarget()
+                    ->where(function ($q) {
+                        $q->where('status', 'FINAL')
+                            ->orWhereHas('supervision', fn ($sq) => $sq->where('status', 'SUBMITTED'))
+                            ->orWhereHas('supervisionStage', fn ($sq) => $sq->where('status', 'FINALIZED'));
+                    })->exists()
+                    || $lecturer->assignmentsAsSupervisor()
+                        ->where(function ($q) {
+                            $q->where('status', 'FINAL')
+                                ->orWhereHas('supervision', fn ($sq) => $sq->where('status', 'SUBMITTED'))
+                                ->orWhereHas('supervisionStage', fn ($sq) => $sq->where('status', 'FINALIZED'));
+                        })->exists()
+                    || GeneratedDocument::where('supervisor_lecturer_id', $lecturer->id)->exists();
+
+                if ($hasProtectedAssignments) {
                     throw ValidationException::withMessages(['lecturer' => 'Dosen memiliki penugasan atau riwayat supervisi sehingga tidak dapat dihapus.']);
                 }
+
                 $scheduleIds = $lecturer->teachingSchedules()->orderBy('id')->lockForUpdate()->pluck('id');
-                if (TeachingOccurrence::whereIn('teaching_schedule_id', $scheduleIds)->whereHas('assignments')->exists()) {
-                    throw ValidationException::withMessages(['lecturer' => 'Jadwal dosen masih terkait penugasan supervisi sehingga tidak dapat dihapus.']);
+                $occurrenceIds = TeachingOccurrence::whereIn('teaching_schedule_id', $scheduleIds)->pluck('id');
+                if ($occurrenceIds->isNotEmpty()) {
+                    $hasProtectedOccurrenceAssignments = SupervisionAssignment::whereIn('teaching_occurrence_id', $occurrenceIds)
+                        ->where(function ($q) {
+                            $q->where('status', 'FINAL')
+                                ->orWhereHas('supervision', fn ($sq) => $sq->where('status', 'SUBMITTED'))
+                                ->orWhereHas('supervisionStage', fn ($sq) => $sq->where('status', 'FINALIZED'));
+                        })->exists();
+
+                    if ($hasProtectedOccurrenceAssignments) {
+                        throw ValidationException::withMessages(['lecturer' => 'Jadwal dosen masih terkait penugasan supervisi sehingga tidak dapat dihapus.']);
+                    }
                 }
+
+                // Bersihkan penugasan draf/batal yang belum pernah disahkan sebelum menghapus dosen
+                $unfinalizedAssignmentIds = $lecturer->assignmentsAsTarget()->pluck('id')
+                    ->merge($lecturer->assignmentsAsSupervisor()->pluck('id'))
+                    ->merge($occurrenceIds->isNotEmpty() ? SupervisionAssignment::whereIn('teaching_occurrence_id', $occurrenceIds)->pluck('id') : collect())
+                    ->unique();
+
+                if ($unfinalizedAssignmentIds->isNotEmpty()) {
+                    Supervision::whereIn('supervision_assignment_id', $unfinalizedAssignmentIds)->delete();
+                    AssignmentAudit::whereIn('supervision_assignment_id', $unfinalizedAssignmentIds)->delete();
+                    SupervisionAssignment::whereIn('id', $unfinalizedAssignmentIds)->delete();
+                }
+
                 ScheduleImportRow::where('matched_lecturer_id', $lecturer->id)->update([
                     'matched_lecturer_id' => null, 'committed_schedule_id' => null,
                     'validation_status' => 'SKIPPED', 'is_approved' => false,

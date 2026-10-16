@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lpm;
 
 use App\Http\Controllers\Controller;
+use App\Models\AssignmentAudit;
 use App\Models\FormTemplate;
 use App\Models\Lecturer;
 use App\Models\PeriodSupervisor;
@@ -13,6 +14,7 @@ use App\Models\SchedulingState;
 use App\Models\ScoringPolicy;
 use App\Models\StageInstrument;
 use App\Models\StudyProgram;
+use App\Models\Supervision;
 use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
@@ -54,6 +56,7 @@ class AssignmentWorkspaceController extends Controller
             'search' => ['nullable', 'string', 'max:150'],
             'prodi' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:assigned,unassigned,manual,auto'],
+            'scope' => ['nullable', 'in:INCLUDED,EXCLUDED,ALL'],
         ]);
         $period = SupervisionPeriod::active()
             ->with(['academicTerm', 'stages'])
@@ -94,6 +97,8 @@ class AssignmentWorkspaceController extends Controller
         ];
         $supervisorWorkloads = collect();
         $studyPrograms = collect();
+        $totalIncludedTargets = 0;
+        $totalExcludedTargets = 0;
 
         if ($period) {
             $targetCount = PeriodTarget::where('supervision_period_id', $period->id)
@@ -122,10 +127,17 @@ class AssignmentWorkspaceController extends Controller
         }
 
         if ($stage) {
+            $scope = $filters['scope'] ?? 'INCLUDED';
+            $allTargetsQuery = PeriodTarget::where('supervision_period_id', $period->id);
+            $totalIncludedTargets = (clone $allTargetsQuery)->where('scope_status', 'INCLUDED')->count();
+            $totalExcludedTargets = (clone $allTargetsQuery)->where('scope_status', 'EXCLUDED')->count();
+
             $targetQuery = PeriodTarget::where('supervision_period_id', $period->id)
-                ->where('scope_status', 'INCLUDED')
+                ->when($scope !== 'ALL', fn ($q) => $q->where('scope_status', $scope))
                 ->with(['lecturer.studyProgram', 'lecturer.faculty']);
-            $targetLecturerIds = (clone $targetQuery)->pluck('lecturer_id');
+            $targetLecturerIds = PeriodTarget::where('supervision_period_id', $period->id)
+                ->where('scope_status', 'INCLUDED')
+                ->pluck('lecturer_id');
 
             $assignments = SupervisionAssignment::where('supervision_stage_id', $stage->id)
                 ->where('status', '<>', 'CANCELLED')
@@ -138,7 +150,7 @@ class AssignmentWorkspaceController extends Controller
                 ->with(['lecturer.studyProgram'])
                 ->get();
 
-            $totalTargets = $targetLecturerIds->count();
+            $totalTargets = $totalIncludedTargets;
             $assignedCount = $assignments->count();
             $unassignedCount = max(0, $totalTargets - $assignedCount);
             $manualCount = $assignments->where('assignment_type', 'MANUAL')->count();
@@ -269,7 +281,9 @@ class AssignmentWorkspaceController extends Controller
             'stats',
             'supervisorWorkloads',
             'studyPrograms',
-            'filters'
+            'filters',
+            'totalIncludedTargets',
+            'totalExcludedTargets'
         ));
     }
 
@@ -576,6 +590,52 @@ class AssignmentWorkspaceController extends Controller
         } catch (Throwable $e) {
             return $this->failureResponse($e, 'assignment.'.__FUNCTION__);
         }
+    }
+
+    public function toggleTargetScope(Request $request, SupervisionStage $stage, Lecturer $lecturer): RedirectResponse
+    {
+        if ($stage->is_finalized) {
+            return back()->with('error', 'Tahap telah difinalisasi. Target supervisi periode tidak dapat diubah.');
+        }
+
+        $period = $stage->supervisionPeriod;
+        $target = PeriodTarget::where('supervision_period_id', $period->id)
+            ->where('lecturer_id', $lecturer->id)
+            ->first();
+
+        if (! $target) {
+            return back()->with('error', 'Dosen tidak terdaftar dalam target periode ini.');
+        }
+
+        $newScope = $target->scope_status === 'INCLUDED' ? 'EXCLUDED' : 'INCLUDED';
+
+        DB::transaction(function () use ($target, $newScope, $period, $lecturer): void {
+            $locks = app(SchedulingLockService::class);
+            $state = $locks->state();
+
+            $target->update(['scope_status' => $newScope]);
+
+            if ($newScope === 'EXCLUDED') {
+                $assignmentIds = SupervisionAssignment::whereIn('supervision_stage_id', $period->stages->modelKeys())
+                    ->where('target_lecturer_id', $lecturer->id)
+                    ->where('status', '<>', 'FINAL')
+                    ->pluck('id');
+
+                if ($assignmentIds->isNotEmpty()) {
+                    Supervision::whereIn('supervision_assignment_id', $assignmentIds)->delete();
+                    AssignmentAudit::whereIn('supervision_assignment_id', $assignmentIds)->delete();
+                    SupervisionAssignment::whereIn('id', $assignmentIds)->delete();
+                }
+            }
+
+            $locks->bump($state);
+        });
+
+        $msg = $newScope === 'EXCLUDED'
+            ? "Dosen {$lecturer->name} berhasil dikeluarkan dari target periode ini. Dosen tidak diwajibkan untuk disupervisi dan tahap kini siap difinalisasi."
+            : "Dosen {$lecturer->name} berhasil dimasukkan kembali ke target supervisi periode ini.";
+
+        return back()->with('success', $msg);
     }
 
     public function finalizeStage(SupervisionStage $stage): RedirectResponse

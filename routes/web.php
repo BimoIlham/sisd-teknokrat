@@ -68,6 +68,7 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
     Route::post('/assignments/stages/{stage}/reopen', [AssignmentWorkspaceController::class, 'reopenStage'])->name('assignments.reopen_stage');
     Route::delete('/assignments/stages/{stage}/assignments/{assignment}', [AssignmentWorkspaceController::class, 'unassign'])->name('assignments.unassign');
     Route::post('/assignments/stages/{stage}/reset-auto', [AssignmentWorkspaceController::class, 'resetAuto'])->name('assignments.reset_auto');
+    Route::post('/assignments/stages/{stage}/lecturers/{lecturer}/toggle-scope', [AssignmentWorkspaceController::class, 'toggleTargetScope'])->name('assignments.toggle_scope');
 
     // Bank Pertanyaan (Question Banks) & Kebijakan Skor
     Route::get('/instruments', [InstrumentController::class, 'index'])->name('instruments.index');

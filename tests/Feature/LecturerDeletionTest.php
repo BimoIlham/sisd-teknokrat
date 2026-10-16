@@ -120,6 +120,28 @@ class LecturerDeletionTest extends TestCase
         $this->assertDatabaseHas('lecturers', ['id' => $this->lecturer->id]);
     }
 
+    public function test_lecturer_with_only_unfinalized_draft_assignments_can_be_deleted_and_cleans_up_drafts(): void
+    {
+        $this->actingAs($this->admin);
+        $stage = $this->period->stages()->create(['stage_no' => 1, 'name' => 'Tahap 1', 'status' => 'DRAFT', 'starts_on' => '2040-10-01', 'ends_on' => '2040-10-31']);
+        $supervisor = Lecturer::create(['name' => 'Supervisor Draft', 'is_active' => true]);
+        $assignment = SupervisionAssignment::create([
+            'supervision_stage_id' => $stage->id,
+            'target_lecturer_id' => $this->lecturer->id,
+            'supervisor_lecturer_id' => $supervisor->id,
+            'teaching_occurrence_id' => $this->occurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+
+        $this->delete(route('lpm.lecturers.destroy', $this->lecturer), $this->deletePayload())
+            ->assertRedirect(route('lpm.lecturers.index', ['period_id' => $this->period->id]))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('lecturers', ['id' => $this->lecturer->id]);
+        $this->assertDatabaseMissing('supervision_assignments', ['id' => $assignment->id]);
+    }
+
     /** @return array{period_id: int, row_version: int} */
     private function deletePayload(): array
     {
