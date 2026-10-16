@@ -284,11 +284,10 @@
                                         <div class="flex flex-col items-center gap-2">
                                         @foreach($assignmentLetters->get($supervisor->id, collect()) as $letter)
                                             <a href="{{ route('lpm.supervisors.assignment_letter', ['supervisor' => $supervisor, 'stage' => $letter->supervision_stage_id]) }}"
-                                               class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#7B1113]/20 bg-rose-50 text-[#7B1113] transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]"
-                                               aria-label="Unduh surat tugas tahap {{ $letter->stage->stage_no }} untuk {{ $supervisor->name }}"
-                                               title="Unduh surat tugas tahap {{ $letter->stage->stage_no }}: {{ $letter->document_number }}">
-                                                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 16v4a1 1 0 001 1h12a1 1 0 001-1v-4"></path></svg>
-                                                <span aria-hidden="true" class="absolute -right-1 -top-1 rounded-full bg-[#7B1113] px-1 text-[9px] font-bold text-white">{{ $letter->stage->stage_no }}</span>
+                                               class="inline-flex h-8 shrink-0 items-center gap-1.5 px-2.5 rounded-lg border border-[#7B1113]/20 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-[#7B1113] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]/30"
+                                               title="Unduh surat tugas {{ $letter->document_number }}">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 16v4a1 1 0 001 1h12a1 1 0 001-1v-4"></path></svg>
+                                                Surat Tugas T{{ $letter->stage->stage_no }}
                                             </a>
                                         @endforeach
                                         </div>
