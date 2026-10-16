@@ -67,8 +67,11 @@ class WorkspacePerformanceTest extends TestCase
         $this->secondStage = $this->period->stages()->create([
             'stage_no' => 2, 'name' => 'Tahap 2', 'starts_on' => '2027-01-16', 'ends_on' => '2027-01-31', 'status' => 'DRAFT',
         ]);
-        $faculty = Faculty::where('code', 'FTIK')->firstOrFail();
-        $program = StudyProgram::where('faculty_id', $faculty->id)->where('name', 'Informatika')->firstOrFail();
+        $faculty = Faculty::firstOrCreate(['code' => 'FTIK'], ['name' => 'Fakultas Teknik dan Ilmu Komputer', 'is_active' => true]);
+        $program = StudyProgram::firstOrCreate(
+            ['faculty_id' => $faculty->id, 'name' => 'Informatika'],
+            ['code' => 'IF', 'is_active' => true]
+        );
         $this->lecturers = collect(range(1, 13))->map(function (int $index) use ($faculty, $program): Lecturer {
             $lecturer = Lecturer::create([
                 'name' => sprintf('Dosen Pengujian %03d', $index), 'external_code' => sprintf('100000%04d', $index),

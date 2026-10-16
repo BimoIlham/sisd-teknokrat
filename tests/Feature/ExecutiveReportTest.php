@@ -75,7 +75,7 @@ class ExecutiveReportTest extends TestCase
         $response->assertViewHas('selectedStage', '1');
         $response->assertViewHas('reportScope', 'stage');
         $response->assertSee('10 Dosen Terbaik Tahap 1');
-        $response->assertDontSee('Tahun Ajaran');
+        $response->assertDontSee('Tahun Akademik');
         $response->assertViewHas('summary', fn (array $summary): bool => $summary['count_t2'] === 0 && $summary['avg_t1'] > 0);
     }
 
@@ -93,10 +93,10 @@ class ExecutiveReportTest extends TestCase
         $response = $this->actingAs($this->admin)->get(route('lpm.reports.supervision'));
 
         $response->assertOk();
-        $response->assertSee('Aditya Saputra, M.Kom.');
-        $response->assertSee('Total Kemunculan Temuan :');
-        $response->assertSee('Periode supervisi saat ini baru menyelesaikan Tahap 1');
-        $response->assertSee('Tahap 2 belum terlaksana');
+        $response->assertSee('Aditya Saputra');
+        $response->assertSee('Temuan Umum dalam Supervisi');
+        $response->assertSee('Belum ada hasil yang dikirim');
+        $response->assertSee('Belum tersedia');
         $response->assertDontSee('Dr. Ryan Randy Suryono, M.Kom');
         $response->assertViewHas('summary', fn (array $summary) => $summary['total_supervised'] === 26
             && $summary['count_t2'] === 0
@@ -104,6 +104,6 @@ class ExecutiveReportTest extends TestCase
             && $summary['avg_t2'] === null
             && $summary['delta_avg'] === null);
         $response->assertViewHas('hasStageTwoData', false);
-        $response->assertViewHas('findings', fn (array $findings) => collect($findings)->sum('count') > 0);
+        $response->assertViewHas('commonFindings', fn ($findings) => collect($findings)->count() > 0);
     }
 }

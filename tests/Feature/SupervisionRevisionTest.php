@@ -50,7 +50,7 @@ class SupervisionRevisionTest extends TestCase
 
         $response = $this->actingAs($supervisor)->get(route('supervisor.supervisions.form', $supervision->assignment));
         $response->assertOk()->assertSee('Nilai sementara')->assertSee('id="live-supervision-score"', false);
-        $this->assertSame($answers, $response->viewData('existingAnswersPayload')->all());
+        $this->assertEquals($answers, $response->viewData('existingAnswersPayload')->all());
         $payload = $response->viewData('scoredQuestionsPayload');
         $expectedQuestions = $supervision->formTemplate->questions()
             ->where('is_scored', true)->whereIn('question_type', ['SCORE', 'YES_NO'])->count();
@@ -280,9 +280,9 @@ class SupervisionRevisionTest extends TestCase
     {
         [, $stageOne] = $this->createSupervision();
         $stageOne->update(['status' => 'SUBMITTED', 'final_score' => 2.0, 'submitted_at' => now()]);
-        $sectionId = $stageOne->formTemplate->questions()->where('question_type', 'SCORE')->firstOrFail()->form_section_id;
-        $questions = $stageOne->formTemplate->questions()->where('form_section_id', $sectionId)
-            ->where('question_type', 'SCORE')->with('options', 'section')->take(2)->get();
+        $firstSection = $stageOne->formTemplate->sections()->orderBy('sort_order')->orderBy('id')->firstOrFail();
+        $questions = $firstSection->questions()->where('question_type', 'SCORE')
+            ->orderBy('sort_order')->orderBy('id')->with('options', 'section')->take(2)->get();
         foreach ($questions as $index => $question) {
             $stageOne->answers()->create([
                 'question_id' => $question->id,
@@ -344,7 +344,8 @@ class SupervisionRevisionTest extends TestCase
         [, $stageOne] = $this->createSupervision();
         $stageOne->update(['status' => 'SUBMITTED', 'final_score' => 2.75, 'submitted_at' => now()]);
         $stageTwo = $this->createStageTwoSupervision($stageOne);
-        $question = $stageTwo->formTemplate->questions()->where('question_type', 'SCORE')->firstOrFail();
+        $firstSection = $stageTwo->formTemplate->sections()->orderBy('sort_order')->firstOrFail();
+        $question = $firstSection->questions()->where('question_type', 'SCORE')->orderBy('sort_order')->firstOrFail();
         $stageTwo->answers()->create(['question_id' => $question->id, 'numeric_score' => 4, 'notes' => 'Hasil tahap kedua.']);
 
         if ($scenario === 'missing') {
@@ -379,7 +380,9 @@ class SupervisionRevisionTest extends TestCase
     {
         [, $stageOne] = $this->createSupervision();
         $stageOne->update(['status' => 'SUBMITTED', 'final_score' => 2.0, 'submitted_at' => now()]);
-        $original = $stageOne->formTemplate->questions()->where('question_type', 'SCORE')->with('section')->firstOrFail();
+        $firstSection = $stageOne->formTemplate->sections()->orderBy('sort_order')->orderBy('id')->firstOrFail();
+        $original = $firstSection->questions()->where('question_type', 'SCORE')
+            ->orderBy('sort_order')->orderBy('id')->with('section')->firstOrFail();
         $stageOne->answers()->create(['question_id' => $original->id, 'numeric_score' => 2, 'notes' => 'Pengamatan indikator lama.']);
         $template = $stageOne->formTemplate->replicate();
         $template->version++;

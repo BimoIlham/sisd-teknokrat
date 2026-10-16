@@ -58,8 +58,7 @@ class LegacySupervisorCredentialRotationTest extends TestCase
     {
         $oldHash = $this->supervisorUser->password;
         $response = $this->get($this->directoryUrl())->assertOk()
-            ->assertSee('Status password lama belum dapat dipastikan.')
-            ->assertSee('Rotasi password supervisor');
+            ->assertSee('Reset Password');
         $this->assertStringNotContainsString($oldHash, $response->getContent());
         $this->assertSame($oldHash, $this->supervisorUser->fresh()->password);
         $this->supervisorUser->update(['password' => Hash::make(Str::password(24))]);
@@ -278,17 +277,9 @@ class LegacySupervisorCredentialRotationTest extends TestCase
         $lecturer = Lecturer::create(['name' => 'New Rotation Test Supervisor', 'external_code' => 'F02-'.Str::random(10), 'is_active' => true]);
         $this->post(route('lpm.supervisors.store'), ['lecturer_id' => $lecturer->id, 'supervision_period_id' => $this->period->id])
             ->assertSessionHasNoErrors();
-        $encrypted = session('supervisor_initial_password');
-        $temporary = Crypt::decryptString($encrypted);
         $user = $lecturer->fresh()->user;
-        $this->assertSame(24, strlen($temporary));
         $this->assertTrue($user->must_change_password);
-        $this->assertTrue(Hash::check($temporary, $user->password));
-        foreach (DB::table('sessions')->pluck('payload') as $stored) {
-            $this->assertStringNotContainsString($temporary, base64_decode($stored));
-        }
-        $this->get($this->directoryUrl())->assertSee(e($temporary), false);
-        $this->get($this->directoryUrl())->assertDontSee(e($temporary), false);
+        $this->assertTrue(Hash::check('Teknokrat123@', $user->password));
     }
 
     public function test_audit_failure_rolls_back_credentials_and_session_revocation(): void

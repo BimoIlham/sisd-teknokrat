@@ -17,7 +17,7 @@
                             <select id="period_id" name="period_id" onchange="this.form.submit()" class="filter-control">
                                 @foreach($periods as $availablePeriod)
                                     <option value="{{ $availablePeriod->id }}" @selected($period?->id === $availablePeriod->id)>
-                                        {{ $availablePeriod->academicTerm?->semester_label ?? 'Semester Supervisi' }} {{ $availablePeriod->academicTerm?->academic_year ?? '-' }}
+                                        {{ $availablePeriod->semester_display }}
                                     </option>
                                 @endforeach
                             </select>

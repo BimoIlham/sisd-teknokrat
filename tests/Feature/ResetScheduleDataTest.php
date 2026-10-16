@@ -114,6 +114,7 @@ class ResetScheduleDataTest extends TestCase
             $retainedCounts[$table] = DB::table($table)->count();
         }
 
+        $initialRevision = (int) DB::table('scheduling_state')->where('id', 1)->value('revision');
         $this->artisan('app:reset-schedule-data')->assertExitCode(0);
 
         foreach (['lecturers', 'supervision_periods', 'supervision_stages', 'stage_instruments', 'period_targets', 'period_supervisors', 'scheduling_rules', 'supervision_assignments', 'supervisions', 'supervision_answers', 'supervision_evidence', 'teaching_schedules', 'teaching_occurrences', 'schedule_imports', 'schedule_import_rows', 'generated_documents', 'courses', 'academic_terms', 'academic_non_teaching_dates'] as $table) {
@@ -129,7 +130,7 @@ class ResetScheduleDataTest extends TestCase
         $this->assertDatabaseMissing('model_has_roles', ['model_type' => User::class, 'model_id' => $supervisor->id]);
         $this->assertDatabaseMissing('sessions', ['id' => 'old-supervisor-session']);
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $supervisor->email]);
-        $this->assertDatabaseHas('scheduling_state', ['id' => 1, 'revision' => 2]);
+        $this->assertDatabaseHas('scheduling_state', ['id' => 1, 'revision' => $initialRevision + 1]);
         Storage::disk('local')->assertMissing(['imports/old.pdf', 'evidence/old.pdf', 'reports/old.pdf']);
         Storage::disk('local')->assertExists('unrelated/keep.pdf');
 
@@ -145,10 +146,11 @@ class ResetScheduleDataTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole('superadmin');
 
+        $initialRevision = (int) DB::table('scheduling_state')->where('id', 1)->value('revision');
         $this->artisan('app:reset-schedule-data')->assertExitCode(0);
         $this->artisan('app:reset-schedule-data')->assertExitCode(0);
 
-        $this->assertDatabaseHas('scheduling_state', ['id' => 1, 'revision' => 3]);
+        $this->assertDatabaseHas('scheduling_state', ['id' => 1, 'revision' => $initialRevision + 2]);
         $this->actingAs($admin)->post(route('lpm.periods.store'), [
             'academic_year' => '2026/2027',
             'semester' => 'GANJIL',

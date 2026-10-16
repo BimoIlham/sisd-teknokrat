@@ -195,6 +195,7 @@ class CompleteDemoDataSeeder extends Seeder
             'PI' => 'Technology Enhanced Language Learning',
             'PM' => 'Media Pembelajaran Matematika',
             'MBI' => 'Advanced Applied Linguistics',
+            'MIK' => 'Sains Data Lanjut',
         ];
         $courses = [];
 
@@ -484,7 +485,7 @@ class CompleteDemoDataSeeder extends Seeder
             $dayOffset = $index % 5;
             $slotIndex = intdiv($index, 5);
             $courseId = $courses[$target->program_code];
-            $isGraduateSchedule = $target->program_code === 'MBI';
+            $isGraduateSchedule = in_array($target->program_code, ['MBI', 'MIK'], true);
             $startTime = $isGraduateSchedule
                 ? $graduateStartTimes[intdiv($index, (int) (count($targets) / 2)) % count($graduateStartTimes)]
                 : $undergraduateStartTimes[$slotIndex];

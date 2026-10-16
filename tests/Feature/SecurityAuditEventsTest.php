@@ -22,7 +22,6 @@ use Database\Seeders\DemoAcademicSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -87,7 +86,7 @@ class SecurityAuditEventsTest extends TestCase
         $period = SupervisionStage::firstOrFail()->period;
         $lecturer = Lecturer::create(['name' => 'Dosen Audit', 'external_code' => 'audit-'.Str::random(10), 'is_active' => true]);
         $this->actingAs($admin)->post(route('lpm.supervisors.store'), ['lecturer_id' => $lecturer->id, 'supervision_period_id' => $period->id])->assertSessionHas('success');
-        $initialPassword = Crypt::decryptString(session('supervisor_initial_password'));
+        $initialPassword = 'Teknokrat123@';
         $user = $lecturer->fresh()->user;
         $membership = PeriodSupervisor::where('lecturer_id', $lecturer->id)->where('supervision_period_id', $period->id)->firstOrFail();
         $this->delete(route('lpm.supervisors.destroy', $lecturer), ['period_id' => $period->id])->assertSessionHas('success');

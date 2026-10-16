@@ -63,7 +63,7 @@ class AnalyticsControllerTest extends TestCase
         $response->assertSee('Semester Ganjil');
         $response->assertSee($period->semester_display);
         $response->assertDontSee('Tahun Akademik');
-        $response->assertSee('Hasil Tahap 1 dan Tahap 2 belum tersedia');
+        $response->assertSee('Belum ada penilaian yang disubmit');
     }
 
     public function test_guest_is_redirected_to_login(): void
