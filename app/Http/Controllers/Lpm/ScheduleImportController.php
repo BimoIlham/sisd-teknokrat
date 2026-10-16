@@ -7,6 +7,7 @@ use App\Models\AcademicTerm;
 use App\Models\ScheduleImport;
 use App\Models\ScheduleImportRow;
 use App\Models\SupervisionPeriod;
+use App\Models\TeachingSchedule;
 use App\Services\ScheduleImport\ScheduleCommitService;
 use App\Services\ScheduleImport\ScheduleImportService;
 use App\Services\UnexpectedErrorReporter;
@@ -64,13 +65,21 @@ class ScheduleImportController extends Controller
         $import = null;
         try {
             $import = $this->importService->import($file, $term, auth()->user());
-            $committedCount = $this->commitService->commit($import, skipInvalidRows: true);
+            $alreadyCommitted = $import->status === 'COMMITTED';
+            $committedCount = $alreadyCommitted ? 0 : $this->commitService->commit($import, skipInvalidRows: true);
             $skippedCount = ScheduleImportRow::where('schedule_import_id', $import->id)
                 ->whereNotNull('skip_reason')
                 ->count();
-            $message = $skippedCount > 0
-                ? "Upload selesai: {$committedCount} jadwal aktif. {$skippedCount} baris tidak diaktifkan karena datanya tidak terbaca dengan jelas."
-                : "Upload PDF berhasil! {$committedCount} jadwal perkuliahan telah aktif di sistem.";
+            if ($alreadyCommitted) {
+                $activeCount = TeachingSchedule::where('source_import_id', $import->id)
+                    ->where('is_active', true)
+                    ->count();
+                $message = "PDF ini sudah pernah diunggah untuk semester ini. {$activeCount} jadwal dari unggahan sebelumnya masih aktif.";
+            } else {
+                $message = $skippedCount > 0
+                    ? "Upload selesai: {$committedCount} jadwal aktif. {$skippedCount} baris dilewati karena data jadwal atau dosennya belum dapat dipastikan."
+                    : "Upload PDF berhasil! {$committedCount} jadwal perkuliahan telah aktif di sistem.";
+            }
 
             return redirect()->route('lpm.lecturers.index')
                 ->with('committed_count', $committedCount)

@@ -19,6 +19,8 @@ use Symfony\Component\Process\Process;
 
 class ScheduleImportService
 {
+    private const PARSER_VERSION = '1.2.0';
+
     public function __construct(protected ScheduleRowValidator $rowValidator) {}
 
     /**
@@ -80,7 +82,7 @@ class ScheduleImportService
                         'size_bytes' => $file->getSize(),
                         'mime_type' => $file->getClientMimeType() ?: 'application/pdf',
                         'parser_name' => 'pdf-schedule-parser',
-                        'parser_version' => '1.1.0',
+                        'parser_version' => self::PARSER_VERSION,
                         'contract_version' => '1.0',
                         'status' => 'PROCESSING',
                         'row_version' => 1,
@@ -239,7 +241,7 @@ class ScheduleImportService
             'status' => 'PENDING_REVIEW',
             'page_count' => $pageCount,
             'parsed_at' => now(),
-            'parser_version' => '1.1.0',
+            'parser_version' => self::PARSER_VERSION,
             'error_message' => $rowCount === 0 ? 'Tidak ada baris jadwal yang terbaca dari PDF.' : null,
         ]);
 

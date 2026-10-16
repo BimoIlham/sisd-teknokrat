@@ -120,7 +120,7 @@ class ScheduleImportTest extends TestCase
         $import = ScheduleImport::sole();
         $response->assertRedirect(route('lpm.lecturers.index'))
             ->assertSessionHas('success', fn (string $message): bool => str_contains($message, '1 jadwal aktif')
-                && str_contains($message, '1 baris tidak diaktifkan'));
+                && str_contains($message, '1 baris dilewati'));
         $this->assertSame('COMMITTED', $import->fresh()->status);
         $this->assertSame(1, TeachingSchedule::where('source_import_id', $import->id)->count());
         $this->assertSame(1, $import->rows()->where('validation_status', 'SKIPPED')->whereNotNull('skip_reason')->count());
@@ -132,6 +132,41 @@ class ScheduleImportTest extends TestCase
             ->assertViewHas('lecturers', fn ($lecturers) => $lecturers->contains('id', $lecturer->id)
                 && ! $lecturers->contains('id', $otherLecturer->id));
         $this->get(route('lpm.import.show', $import))->assertRedirect(route('lpm.lecturers.index'));
+    }
+
+    public function test_reuploading_committed_pdf_reports_existing_active_schedules_and_previous_skipped_rows(): void
+    {
+        Storage::fake('local');
+        $payload = $this->validOnlinePayload();
+        $this->createImportLecturer($payload['lecturer_name']);
+        Http::fake(['*' => Http::response([
+            'parser' => ['version' => '1.1.0'],
+            'rows' => [
+                ['confidence' => 0.98, 'normalized' => $payload],
+                ['confidence' => 0.98, 'normalized' => array_replace($payload, ['course_name' => 'Aplikasi Komputer ◆'])],
+            ],
+            'page_count' => 1,
+        ])]);
+        $fileContent = '%PDF-1.7 repeated-schedule-import';
+
+        $this->actingAs($this->admin)->post(route('lpm.import.store'), [
+            'academic_term_id' => $this->term->id,
+            'schedule_pdf' => UploadedFile::fake()->createWithContent('jadwal.pdf', $fileContent),
+        ])->assertRedirect(route('lpm.lecturers.index'));
+
+        $response = $this->post(route('lpm.import.store'), [
+            'academic_term_id' => $this->term->id,
+            'schedule_pdf' => UploadedFile::fake()->createWithContent('jadwal-kedua.pdf', $fileContent),
+        ]);
+
+        $response->assertRedirect(route('lpm.lecturers.index'))
+            ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'sudah pernah diunggah')
+                && str_contains($message, '1 jadwal dari unggahan sebelumnya masih aktif')
+                && ! str_contains($message, 'baris sebelumnya dilewati')
+                && ! str_contains($message, 'Upload selesai: 0 jadwal aktif'));
+        $this->assertSame(1, ScheduleImport::count());
+        $this->assertSame(1, TeachingSchedule::count());
+        Http::assertSentCount(1);
     }
 
     public function test_pdf_upload_with_no_confident_rows_returns_to_upload_page_without_activating_schedules(): void

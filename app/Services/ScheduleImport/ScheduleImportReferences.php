@@ -100,7 +100,7 @@ class ScheduleImportReferences
         if ($import->stored_path && $source->exists($import->stored_path) && ! Storage::disk('local')->exists($archivePath)) {
             Storage::disk('local')->put($archivePath, $source->get($import->stored_path));
         }
-        $this->rememberDocument($import->sha256, $import->original_filename, $import->parser_version ?? '1.1.0', $import->page_count ?? 1, $rows, Storage::disk('local')->exists($archivePath) ? $archivePath : null);
+        $this->rememberDocument($import->sha256, $import->original_filename, $import->parser_version ?? '1.2.0', $import->page_count ?? 1, $rows, Storage::disk('local')->exists($archivePath) ? $archivePath : null);
     }
 
     /** @param list<array<string, mixed>> $rows */
@@ -118,7 +118,7 @@ class ScheduleImportReferences
     /** @return array{rows: list<array<string, mixed>>, page_count: int}|null */
     public function parsedDocument(string $sha256): ?array
     {
-        $reference = DB::table('schedule_document_references')->where('sha256', $sha256)->where('parser_version', '1.1.0')->first();
+        $reference = DB::table('schedule_document_references')->where('sha256', $sha256)->where('parser_version', '1.2.0')->first();
         if (! $reference || $reference->page_count > 200) {
             return null;
         }

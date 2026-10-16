@@ -48,7 +48,7 @@ class ResourceLimitError(ValueError):
 
 
 class SchedulePdfParser:
-    def __init__(self, name: str = "tabular-layout-a", version: str = "1.1.0"):
+    def __init__(self, name: str = "tabular-layout-a", version: str = "1.2.0"):
         self.name = name
         self.version = version
 
@@ -260,6 +260,9 @@ class SchedulePdfParser:
         if not course_text and len(raw_cells) > 2:
             course_text = str(raw_cells[2]).strip() if raw_cells[2] else ""
 
+        if self._is_team_label(lecturer_text):
+            return None
+
         issues: List[ValidationIssue] = []
 
         # Parse day
@@ -341,6 +344,12 @@ class SchedulePdfParser:
             confidence=0.92 if not issues else 0.70,
             issues=issues
         )
+
+    @staticmethod
+    def _is_team_label(value: Optional[str]) -> bool:
+        normalized = re.sub(r'\s+', ' ', (value or '')).strip().casefold()
+
+        return normalized in {'team', 'tim', 'team teaching', 'dosen pengampu'}
 
     def _parse_text_line(self, line: str, m_time: re.Match, row_no: int, page_no: int, default_semester: Optional[str], default_year: Optional[str]) -> Optional[ParsedRow]:
         start_time = normalize_time_str(m_time.group(1), m_time.group(2))
@@ -542,8 +551,8 @@ class SchedulePdfParser:
                         lecturer = c_clean
                         break
 
-        if lecturer and lecturer.lower() in ('team', 'tim', 'team teaching', 'dosen pengampu'):
-            lecturer = None
+        if self._is_team_label(lecturer):
+            return []
 
         day_cols = {}
         time_col = None
