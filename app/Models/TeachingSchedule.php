@@ -96,6 +96,43 @@ class TeachingSchedule extends Model
         return $this->hasMany(TeachingOccurrence::class);
     }
 
+    public function hasSameSupervisionScheduleAs(self $other): bool
+    {
+        return (int) $this->lecturer_id === (int) $other->lecturer_id
+            && (int) $this->course_id === (int) $other->course_id
+            && (int) $this->day_of_week === (int) $other->day_of_week
+            && $this->normalizeTime($this->starts_local) === $this->normalizeTime($other->starts_local)
+            && $this->normalizeTime($this->ends_local) === $this->normalizeTime($other->ends_local)
+            && $this->normalizeText($this->class_name) === $this->normalizeText($other->class_name)
+            && $this->normalizeText($this->room_name) === $this->normalizeText($other->room_name)
+            && strtoupper((string) $this->delivery_mode) === strtoupper((string) $other->delivery_mode);
+    }
+
+    /** @return array{lecturer_id: int, course_id: int, day_of_week: int, starts_local: string, ends_local: string, class_name: string, room_name: string, delivery_mode: string} */
+    public function supervisionIdentity(): array
+    {
+        return [
+            'lecturer_id' => (int) $this->lecturer_id,
+            'course_id' => (int) $this->course_id,
+            'day_of_week' => (int) $this->day_of_week,
+            'starts_local' => $this->normalizeTime($this->starts_local),
+            'ends_local' => $this->normalizeTime($this->ends_local),
+            'class_name' => $this->normalizeText($this->class_name),
+            'room_name' => $this->normalizeText($this->room_name),
+            'delivery_mode' => strtoupper((string) $this->delivery_mode),
+        ];
+    }
+
+    private function normalizeTime(?string $time): string
+    {
+        return substr((string) $time, 0, 5);
+    }
+
+    private function normalizeText(?string $value): string
+    {
+        return trim((string) $value);
+    }
+
     public function getStartTimeAttribute(): ?string
     {
         return $this->attributes['starts_local'] ?? null;

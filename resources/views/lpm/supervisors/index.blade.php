@@ -180,7 +180,7 @@
                             <th class="py-3 px-4 text-center">Beban Mengajar</th>
                             <th class="py-3 px-4 text-center">Tugas Supervisi</th>
                             <th class="py-3 px-4 text-center">Periode Ditugaskan</th>
-                            <th class="py-3 px-4 text-right whitespace-nowrap">Aksi</th>
+                            <th class="py-3 px-4 text-center whitespace-nowrap">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-xs">
@@ -279,25 +279,27 @@
                                 </td>
 
                                 <!-- Actions -->
-                                <td class="py-3.5 px-4 text-right align-middle whitespace-nowrap">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <div class="flex flex-col items-end gap-2">
+                                <td class="py-3.5 px-4 text-center align-middle whitespace-nowrap">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <div class="flex flex-col items-center gap-2">
                                         @foreach($assignmentLetters->get($supervisor->id, collect()) as $letter)
                                             <a href="{{ route('lpm.supervisors.assignment_letter', ['supervisor' => $supervisor, 'stage' => $letter->supervision_stage_id]) }}"
-                                               class="inline-flex h-8 shrink-0 items-center gap-1.5 px-2.5 rounded-lg border border-[#7B1113]/20 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-[#7B1113] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]/30"
-                                               title="Unduh surat tugas {{ $letter->document_number }}">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 16v4a1 1 0 001 1h12a1 1 0 001-1v-4"></path></svg>
-                                                Surat Tugas T{{ $letter->stage->stage_no }}
+                                               class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#7B1113]/20 bg-rose-50 text-[#7B1113] transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]"
+                                               aria-label="Unduh surat tugas tahap {{ $letter->stage->stage_no }} untuk {{ $supervisor->name }}"
+                                               title="Unduh surat tugas tahap {{ $letter->stage->stage_no }}: {{ $letter->document_number }}">
+                                                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 16v4a1 1 0 001 1h12a1 1 0 001-1v-4"></path></svg>
+                                                <span aria-hidden="true" class="absolute -right-1 -top-1 rounded-full bg-[#7B1113] px-1 text-[9px] font-bold text-white">{{ $letter->stage->stage_no }}</span>
                                             </a>
                                         @endforeach
                                         </div>
                                         <div class="inline-flex items-center gap-2">
                                         <a 
                                             href="{{ route('lpm.lecturers.show', ['lecturer' => $supervisor, 'period_id' => $selectedPeriod?->id]) }}" 
-                                            class="inline-flex h-8 shrink-0 items-center justify-center px-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                                            title="Lihat Detail Profil & Riwayat"
+                                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]"
+                                            aria-label="Lihat detail profil dan riwayat {{ $supervisor->name }}"
+                                            title="Lihat detail profil dan riwayat {{ $supervisor->name }}"
                                         >
-                                            Detail
+                                            <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.5" stroke-width="2" /></svg>
                                         </a>
 
                                         @if(isset($rotationSelections[$supervisor->id]))
@@ -309,7 +311,9 @@
                                                 <input type="hidden" name="confirm_email" value="{{ $supervisor->user->email }}">
                                                 <input type="hidden" name="confirm_reset" value="1">
                                                 <input type="hidden" name="credential_state" value="{{ $rotationSelections[$supervisor->id] }}">
-                                                <button type="submit" aria-label="Reset password {{ $supervisor->name }}" class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50">Reset Password</button>
+                                                <button type="submit" aria-label="Reset password {{ $supervisor->name }}" title="Reset password {{ $supervisor->name }}" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">
+                                                    <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 11a8 8 0 111.8 5.1M4 17v-6h6M12 8v4l3 2" /></svg>
+                                                </button>
                                             </form>
                                         @endif
 

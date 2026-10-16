@@ -65,4 +65,16 @@ class TeachingOccurrence extends Model
     {
         return $this->ends_at ? $this->ends_at->timezone('Asia/Jakarta')->format('H:i') : '09:40';
     }
+
+    public function hasSameSupervisionSlotAs(self $other): bool
+    {
+        $this->loadMissing('teachingSchedule');
+        $other->loadMissing('teachingSchedule');
+
+        return $this->teachingSchedule
+            && $other->teachingSchedule
+            && $this->teachingSchedule->hasSameSupervisionScheduleAs($other->teachingSchedule)
+            && $this->start_time_local === $other->start_time_local
+            && $this->end_time_local === $other->end_time_local;
+    }
 }

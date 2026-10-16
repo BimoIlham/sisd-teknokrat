@@ -49,7 +49,7 @@
                         <th class="px-3 py-2.5">Mata Kuliah / Kelas</th>
                         <th class="px-3 py-2.5">Waktu & Ruang</th>
                         <th class="px-3 py-2.5 text-center">Status</th>
-                        <th class="px-3 py-2.5 text-right">Aksi</th>
+                        <th class="px-3 py-2.5 text-center">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -90,14 +90,14 @@
                                     </span>
                                 @endif
                             </td>
-                            <td class="px-3 py-3 text-right">
+                            <td class="px-3 py-3 text-center">
                                 @if($assign->supervision && $assign->supervision->status === 'SUBMITTED')
-                                    <a href="{{ route('supervisor.supervisions.show', $assign->supervision) }}" class="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-xs font-semibold text-slate-700">
-                                        Lihat Hasil
+                                    <a href="{{ route('supervisor.supervisions.show', $assign->supervision) }}" aria-label="Lihat hasil supervisi {{ $assign->targetLecturer->name }}" title="Lihat hasil supervisi {{ $assign->targetLecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500">
+                                        <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.5" stroke-width="2" /></svg>
                                     </a>
                                 @elseif($assign->status === 'FINAL' && $inputStatus === 'open')
-                                    <a href="{{ route('supervisor.supervisions.form', $assign) }}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#7B1113] hover:bg-[#5E0C0F] text-white text-xs font-semibold shadow-xs">
-                                        {{ $assign->supervision?->answers_exists ? 'Lanjutkan Penilaian' : 'Buka Formulir' }} &rarr;
+                                    <a href="{{ route('supervisor.supervisions.form', $assign) }}" aria-label="{{ $assign->supervision?->answers_exists ? 'Lanjutkan penilaian' : 'Buka formulir' }} {{ $assign->targetLecturer->name }}" title="{{ $assign->supervision?->answers_exists ? 'Lanjutkan penilaian' : 'Buka formulir' }} {{ $assign->targetLecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#7B1113] text-white shadow-xs transition-colors hover:bg-[#5E0C0F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]">
+                                        <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3h8l4 4v13a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1h3zm8 0v4h4M8 12h8m-8 4h5" /></svg>
                                     </a>
                                 @elseif($assign->status === 'FINAL')
                                     <span class="inline-flex max-w-64 items-center rounded-lg bg-slate-100 px-3 py-1.5 text-left text-xs font-semibold text-slate-600">

@@ -17,6 +17,8 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Tests\TestCase;
@@ -107,6 +109,123 @@ class OfflineSupervisionPriorityTest extends TestCase
         }
     }
 
+    public function test_pair_synchronization_selects_the_identical_teaching_schedule(): void
+    {
+        $differentScheduleOccurrence = $this->createDifferentScheduleOccurrence('2031-01-06');
+        $source = $this->createSourceAssignment();
+
+        $counterpart = app(PeriodAssignmentPairService::class)->synchronizeCounterpart(
+            $source,
+            $this->admin,
+            'Uji kecocokan jadwal lengkap'
+        );
+
+        $this->assertSame(
+            $this->occurrence->teaching_schedule_id,
+            $counterpart->fresh()->teachingOccurrence->teaching_schedule_id
+        );
+        $this->assertNotSame(
+            $differentScheduleOccurrence->teaching_schedule_id,
+            $counterpart->fresh()->teachingOccurrence->teaching_schedule_id
+        );
+        $this->assertSame($this->supervisor->id, $counterpart->fresh()->supervisor_lecturer_id);
+        $this->assertNotSame(
+            $source->teachingOccurrence->occurs_on->toDateString(),
+            $counterpart->fresh()->teachingOccurrence->occurs_on->toDateString()
+        );
+    }
+
+    public function test_pair_synchronization_fails_when_only_a_different_schedule_exists_in_counterpart_stage(): void
+    {
+        $this->occurrence->teachingSchedule->occurrences()
+            ->whereDate('occurs_on', '2031-01-06')
+            ->update(['status' => 'CANCELLED']);
+        $this->createDifferentScheduleOccurrence('2031-01-06');
+        $source = $this->createSourceAssignment();
+
+        $this->expectException(ValidationException::class);
+
+        app(PeriodAssignmentPairService::class)->synchronizeCounterpart(
+            $source,
+            $this->admin,
+            'Uji penolakan jadwal berbeda'
+        );
+    }
+
+    public function test_pair_synchronization_rejects_different_occurrence_times_on_the_same_schedule(): void
+    {
+        $this->target->teachingSchedules()->firstOrFail()->occurrences()
+            ->whereDate('occurs_on', '2031-01-06')
+            ->update([
+                'starts_at' => Carbon::parse('2031-01-06 09:00', 'Asia/Jakarta')->utc(),
+                'ends_at' => Carbon::parse('2031-01-06 10:40', 'Asia/Jakarta')->utc(),
+            ]);
+        $source = $this->createSourceAssignment();
+
+        $this->expectException(ValidationException::class);
+
+        app(PeriodAssignmentPairService::class)->synchronizeCounterpart(
+            $source,
+            $this->admin,
+            'Uji kesamaan jam aktual'
+        );
+    }
+
+    public function test_candidate_builder_excludes_a_target_with_a_mismatched_counterpart_schedule(): void
+    {
+        $differentOccurrence = $this->createDifferentScheduleOccurrence('2031-01-06');
+        SupervisionAssignment::create([
+            'supervision_stage_id' => $this->secondStage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $differentOccurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+
+        $pool = app(CandidateBuilder::class)->build($this->stage);
+
+        $this->assertSame([], collect($pool['candidates'])
+            ->where('target_lecturer_id', $this->target->id)
+            ->values()
+            ->all());
+    }
+
+    public function test_candidate_contract_contains_every_schedule_identity_field(): void
+    {
+        $candidate = app(CandidateBuilder::class)->build($this->stage)['candidates'][0];
+
+        $this->assertSame([
+            'lecturer_id', 'course_id', 'day_of_week', 'starts_local', 'ends_local',
+            'class_name', 'room_name', 'delivery_mode',
+        ], array_keys($candidate['schedule_identity']));
+    }
+
+    #[DataProvider('scheduleIdentityDifferences')]
+    public function test_schedule_identity_requires_every_timetable_field_to_match(string $field, mixed $differentValue): void
+    {
+        $sourceSchedule = $this->occurrence->teachingSchedule;
+        $otherSchedule = $sourceSchedule->replicate();
+        $otherSchedule->{$field} = $differentValue;
+
+        $this->assertFalse($sourceSchedule->hasSameSupervisionScheduleAs($otherSchedule));
+    }
+
+    /** @return array<string, array{string, mixed}> */
+    public static function scheduleIdentityDifferences(): array
+    {
+        return [
+            'lecturer' => ['lecturer_id', 999999],
+            'course' => ['course_id', 999999],
+            'weekday' => ['day_of_week', 2],
+            'start time' => ['starts_local', '09:00'],
+            'end time' => ['ends_local', '10:40'],
+            'class' => ['class_name', 'Kelas Berbeda'],
+            'room' => ['room_name', 'Ruang Berbeda'],
+            'delivery mode' => ['delivery_mode', 'ONLINE'],
+        ];
+    }
+
     public function test_manual_online_assignment_is_preserved_by_automatic_generation(): void
     {
         $online = $this->option($this->target, 'ONLINE', '2030-10-08');
@@ -169,5 +288,36 @@ class OfflineSupervisionPriorityTest extends TestCase
         return TeachingOccurrence::create(['teaching_schedule_id' => $schedule->id, 'original_date' => $date, 'occurs_on' => $date,
             'starts_at' => Carbon::parse($date.' 08:00', 'Asia/Jakarta')->utc(),
             'ends_at' => Carbon::parse($date.' 09:40', 'Asia/Jakarta')->utc(), 'status' => 'SCHEDULED']);
+    }
+
+    private function createDifferentScheduleOccurrence(string $date): TeachingOccurrence
+    {
+        $schedule = $this->occurrence->teachingSchedule->replicate(['fingerprint']);
+        $schedule->class_name = 'Kelas Berbeda';
+        $schedule->room_name = 'Ruang Berbeda';
+        $schedule->starts_local = '07:00';
+        $schedule->ends_local = '08:40';
+        $schedule->save();
+
+        return TeachingOccurrence::create([
+            'teaching_schedule_id' => $schedule->id,
+            'original_date' => $date,
+            'occurs_on' => $date,
+            'starts_at' => Carbon::parse($date.' 07:00', 'Asia/Jakarta')->utc(),
+            'ends_at' => Carbon::parse($date.' 08:40', 'Asia/Jakarta')->utc(),
+            'status' => 'SCHEDULED',
+        ]);
+    }
+
+    private function createSourceAssignment(): SupervisionAssignment
+    {
+        return SupervisionAssignment::create([
+            'supervision_stage_id' => $this->stage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $this->occurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
     }
 }

@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Lpm\LecturerDirectoryController;
 use App\Models\GeneratedDocument;
+use App\Models\Lecturer;
 use App\Models\SchedulingState;
 use App\Models\Supervision;
 use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
+use App\Models\TeachingOccurrence;
 use App\Models\TeachingSchedule;
 use App\Services\Reporting\SupervisorAssignmentLetterService;
 use App\Services\ScheduleImport\ScheduleCommitService;
@@ -15,6 +17,7 @@ use App\Services\ScheduleImport\ScheduleCourseResolver;
 use App\Services\Scheduling\ManualOverrideService;
 use App\Services\Scheduling\StageFinalizationService;
 use App\Services\Supervision\SubmitService;
+use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +72,246 @@ class SchedulingAtomicityTest extends TestCase
         }
     }
 
+    public function test_manual_override_rebalances_automatic_pairs_in_both_stages(): void
+    {
+        $otherTarget = $this->createSchedulingTarget('Dosen Otomatis Terdampak');
+        $otherSchedule = $otherTarget->teachingSchedules()->firstOrFail();
+        $otherStageOneOccurrence = $this->createOccurrence($otherSchedule, '2030-10-14');
+        $otherStageTwoOccurrence = $this->createOccurrence($otherSchedule, '2031-01-13');
+        $fixedManualTarget = $this->createSchedulingTarget('Dosen Manual Yang Tidak Berubah');
+        $fixedManualSchedule = $fixedManualTarget->teachingSchedules()->firstOrFail();
+        $fixedManualStageOneOccurrence = $this->createOccurrence($fixedManualSchedule, '2030-10-21');
+        $fixedManualStageTwoOccurrence = $this->createOccurrence($fixedManualSchedule, '2031-01-20');
+        $fixedManualAssignments = [];
+        foreach ([[$this->stage, $fixedManualStageOneOccurrence], [$this->secondStage, $fixedManualStageTwoOccurrence]] as [$stage, $occurrence]) {
+            $fixedManualAssignments[] = SupervisionAssignment::create([
+                'supervision_stage_id' => $stage->id,
+                'target_lecturer_id' => $fixedManualTarget->id,
+                'supervisor_lecturer_id' => $this->supervisor->id,
+                'teaching_occurrence_id' => $occurrence->id,
+                'starts_at' => $occurrence->starts_at,
+                'ends_at' => $occurrence->ends_at,
+                'assignment_type' => 'MANUAL',
+                'is_locked' => true,
+                'status' => 'DRAFT',
+            ]);
+        }
+
+        $oldSource = SupervisionAssignment::create([
+            'supervision_stage_id' => $this->stage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $this->occurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+        $oldCounterpart = SupervisionAssignment::create([
+            'supervision_stage_id' => $this->secondStage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $this->target->teachingSchedules()->firstOrFail()->occurrences()
+                ->whereDate('occurs_on', '2031-01-06')->value('id'),
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+        SupervisionAssignment::create([
+            'supervision_stage_id' => $this->stage->id,
+            'target_lecturer_id' => $otherTarget->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $otherTarget->teachingSchedules()->firstOrFail()->occurrences()
+                ->whereDate('occurs_on', '2030-10-07')->value('id'),
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+        SupervisionAssignment::create([
+            'supervision_stage_id' => $this->secondStage->id,
+            'target_lecturer_id' => $otherTarget->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $otherTarget->teachingSchedules()->firstOrFail()->occurrences()
+                ->whereDate('occurs_on', '2031-01-06')->value('id'),
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+
+        $result = app(ManualOverrideService::class)->assignWithResults(
+            $this->stage,
+            $this->target->id,
+            $this->supervisor->id,
+            $this->occurrence->id,
+            $this->admin
+        );
+
+        $manualAssignment = $result['assignment']->fresh();
+        $manualCounterpart = $this->secondStage->assignments()
+            ->where('target_lecturer_id', $this->target->id)
+            ->where('status', '<>', 'CANCELLED')
+            ->with('teachingOccurrence.teachingSchedule')
+            ->firstOrFail();
+        $otherStageOneAssignment = $this->stage->assignments()->where('target_lecturer_id', $otherTarget->id)->where('status', '<>', 'CANCELLED')->firstOrFail();
+        $otherStageTwoAssignment = $this->secondStage->assignments()->where('target_lecturer_id', $otherTarget->id)->where('status', '<>', 'CANCELLED')->firstOrFail();
+
+        $this->assertSame('MANUAL', $manualAssignment->assignment_type);
+        $manualAssignment->load('teachingOccurrence.teachingSchedule');
+        $this->assertSame($manualAssignment->supervisor_lecturer_id, $manualCounterpart->supervisor_lecturer_id);
+        $this->assertTrue($manualAssignment->teachingOccurrence->hasSameSupervisionSlotAs($manualCounterpart->teachingOccurrence));
+        $this->assertNotSame(
+            $manualAssignment->teachingOccurrence->occurs_on->toDateString(),
+            $manualCounterpart->teachingOccurrence->occurs_on->toDateString()
+        );
+        $this->assertSame('CANCELLED', $oldSource->fresh()->status);
+        $this->assertSame('CANCELLED', $oldCounterpart->fresh()->status);
+        $this->assertSame($otherStageOneOccurrence->id, $otherStageOneAssignment->teaching_occurrence_id);
+        $this->assertSame($otherStageTwoOccurrence->id, $otherStageTwoAssignment->teaching_occurrence_id);
+        $this->assertSame('AUTO', $otherStageOneAssignment->assignment_type);
+        $this->assertSame('AUTO', $otherStageTwoAssignment->assignment_type);
+        $this->assertSame($fixedManualStageOneOccurrence->id, $fixedManualAssignments[0]->fresh()->teaching_occurrence_id);
+        $this->assertSame($fixedManualStageTwoOccurrence->id, $fixedManualAssignments[1]->fresh()->teaching_occurrence_id);
+        $this->assertSame('MANUAL', $fixedManualAssignments[0]->fresh()->assignment_type);
+        $this->assertSame('MANUAL', $fixedManualAssignments[1]->fresh()->assignment_type);
+        $this->assertSame(1, $result['reassigned_count']);
+        $this->assertSame([], $result['unassigned_targets']);
+    }
+
+    public function test_manual_candidate_can_displace_an_editable_automatic_pair(): void
+    {
+        $otherTarget = $this->createSchedulingTarget('Dosen Otomatis Yang Digeser');
+        $schedule = $otherTarget->teachingSchedules()->firstOrFail();
+        foreach ([[$this->stage, '2030-10-07'], [$this->secondStage, '2031-01-06']] as [$stage, $date]) {
+            $occurrence = $schedule->occurrences()->whereDate('occurs_on', $date)->firstOrFail();
+            SupervisionAssignment::create([
+                'supervision_stage_id' => $stage->id,
+                'target_lecturer_id' => $otherTarget->id,
+                'supervisor_lecturer_id' => $this->supervisor->id,
+                'teaching_occurrence_id' => $occurrence->id,
+                'starts_at' => $occurrence->starts_at,
+                'ends_at' => $occurrence->ends_at,
+                'assignment_type' => 'AUTO',
+                'status' => 'DRAFT',
+            ]);
+        }
+
+        $check = app(ManualOverrideService::class)->checkCandidate(
+            $this->stage,
+            $this->target->id,
+            $this->supervisor->id,
+            $this->occurrence->id
+        );
+
+        $this->assertTrue($check['valid']);
+        $this->assertSame([], $check['conflicts']);
+        $this->assertSame(1, $check['displaced_count']);
+    }
+
+    public function test_manual_candidate_cannot_displace_another_manual_pair(): void
+    {
+        $otherTarget = $this->createSchedulingTarget('Dosen Manual Yang Tetap');
+        $schedule = $otherTarget->teachingSchedules()->firstOrFail();
+        foreach ([[$this->stage, '2030-10-07'], [$this->secondStage, '2031-01-06']] as [$stage, $date]) {
+            $occurrence = $schedule->occurrences()->whereDate('occurs_on', $date)->firstOrFail();
+            SupervisionAssignment::create([
+                'supervision_stage_id' => $stage->id,
+                'target_lecturer_id' => $otherTarget->id,
+                'supervisor_lecturer_id' => $this->supervisor->id,
+                'teaching_occurrence_id' => $occurrence->id,
+                'starts_at' => $occurrence->starts_at,
+                'ends_at' => $occurrence->ends_at,
+                'assignment_type' => 'MANUAL',
+                'is_locked' => true,
+                'status' => 'DRAFT',
+            ]);
+        }
+
+        $check = app(ManualOverrideService::class)->checkCandidate(
+            $this->stage,
+            $this->target->id,
+            $this->supervisor->id,
+            $this->occurrence->id
+        );
+
+        $this->assertFalse($check['valid']);
+        $this->assertContains('H04: Supervisor telah memiliki penugasan supervisi lain pada waktu yang bersamaan.', $check['conflicts']);
+        $this->assertSame(0, $check['displaced_count']);
+    }
+
+    public function test_manual_choice_is_saved_and_unreplaced_automatic_target_is_reported(): void
+    {
+        $otherTarget = $this->createSchedulingTarget('Dosen Tanpa Slot Pengganti');
+        $schedule = $otherTarget->teachingSchedules()->firstOrFail();
+        $firstOccurrence = $schedule->occurrences()->whereDate('occurs_on', '2030-10-07')->firstOrFail();
+        $secondOccurrence = $schedule->occurrences()->whereDate('occurs_on', '2031-01-06')->firstOrFail();
+        $oldAutomaticPair = [];
+        foreach ([[$this->stage, $firstOccurrence], [$this->secondStage, $secondOccurrence]] as [$stage, $occurrence]) {
+            $oldAutomaticPair[] = SupervisionAssignment::create([
+                'supervision_stage_id' => $stage->id,
+                'target_lecturer_id' => $otherTarget->id,
+                'supervisor_lecturer_id' => $this->supervisor->id,
+                'teaching_occurrence_id' => $occurrence->id,
+                'starts_at' => $occurrence->starts_at,
+                'ends_at' => $occurrence->ends_at,
+                'assignment_type' => 'AUTO',
+                'status' => 'DRAFT',
+            ]);
+        }
+
+        $result = app(ManualOverrideService::class)->assignWithResults(
+            $this->stage,
+            $this->target->id,
+            $this->supervisor->id,
+            $this->occurrence->id,
+            $this->admin
+        );
+
+        $this->assertSame('MANUAL', $result['assignment']->fresh()->assignment_type);
+        $this->assertSame('CANCELLED', $oldAutomaticPair[0]->fresh()->status);
+        $this->assertSame('CANCELLED', $oldAutomaticPair[1]->fresh()->status);
+        $this->assertSame(0, $result['reassigned_count']);
+        $this->assertSame([['lecturer_id' => $otherTarget->id, 'name' => $otherTarget->name]], $result['unassigned_targets']);
+    }
+
+    public function test_manual_rebalancing_prefers_offline_and_uses_online_when_offline_conflicts(): void
+    {
+        $offlineTarget = $this->createSchedulingTarget('Dosen Dengan Slot Offline Pengganti');
+        $offlineStageOne = $this->createModeOccurrence($offlineTarget, 'OFFLINE', '2030-10-14');
+        $offlineStageTwo = $this->createModeOccurrence($offlineTarget, 'OFFLINE', '2031-01-13');
+        $fallbackTarget = $this->createSchedulingTarget('Dosen Dengan Cadangan Online');
+        $fallbackOfflineStageOne = $this->createModeOccurrence($fallbackTarget, 'OFFLINE', '2030-10-07');
+        $fallbackOfflineStageTwo = $this->createModeOccurrence($fallbackTarget, 'OFFLINE', '2031-01-06');
+        $fallbackOnlineStageOne = $this->createModeOccurrence($fallbackTarget, 'ONLINE', '2030-10-08');
+        $fallbackOnlineStageTwo = $this->createModeOccurrence($fallbackTarget, 'ONLINE', '2031-01-07');
+
+        app(ManualOverrideService::class)->assignWithResults(
+            $this->stage,
+            $this->target->id,
+            $this->supervisor->id,
+            $this->occurrence->id,
+            $this->admin
+        );
+
+        $offlineAssignment = $this->stage->assignments()
+            ->where('target_lecturer_id', $offlineTarget->id)
+            ->where('status', '<>', 'CANCELLED')
+            ->firstOrFail();
+        $offlineCounterpart = $this->secondStage->assignments()
+            ->where('target_lecturer_id', $offlineTarget->id)
+            ->where('status', '<>', 'CANCELLED')
+            ->firstOrFail();
+        $fallbackAssignment = $this->stage->assignments()
+            ->where('target_lecturer_id', $fallbackTarget->id)
+            ->where('status', '<>', 'CANCELLED')
+            ->firstOrFail();
+        $fallbackCounterpart = $this->secondStage->assignments()
+            ->where('target_lecturer_id', $fallbackTarget->id)
+            ->where('status', '<>', 'CANCELLED')
+            ->firstOrFail();
+
+        $this->assertSame($offlineStageOne->id, $offlineAssignment->teaching_occurrence_id);
+        $this->assertSame($offlineStageTwo->id, $offlineCounterpart->teaching_occurrence_id);
+        $this->assertSame($fallbackOnlineStageOne->id, $fallbackAssignment->teaching_occurrence_id);
+        $this->assertSame($fallbackOnlineStageTwo->id, $fallbackCounterpart->teaching_occurrence_id);
+        $this->assertNotSame($fallbackOfflineStageOne->id, $fallbackAssignment->teaching_occurrence_id);
+        $this->assertNotSame($fallbackOfflineStageTwo->id, $fallbackCounterpart->teaching_occurrence_id);
+    }
+
     public function test_manual_assignment_reads_finalized_status_again_from_database(): void
     {
         $this->stage->fresh()->update(['status' => 'FINALIZED']);
@@ -86,6 +329,36 @@ class SchedulingAtomicityTest extends TestCase
         $this->assertSame(['FINAL'], SupervisionAssignment::whereIn('supervision_stage_id', [$this->stage->id, $this->secondStage->id])->pluck('status')->unique()->values()->all());
         $this->assertSame(2, GeneratedDocument::where('supervision_period_id', $this->period->id)->count());
         $this->assertSame(2, GeneratedDocument::where('supervision_period_id', $this->period->id)->pluck('document_number')->unique()->count());
+    }
+
+    public function test_finalization_rejects_a_pair_with_different_schedule_details(): void
+    {
+        $otherSchedule = $this->target->teachingSchedules()->firstOrFail()->replicate(['fingerprint']);
+        $otherSchedule->class_name = 'Kelas Berbeda';
+        $otherSchedule->room_name = 'Ruang Berbeda';
+        $otherSchedule->save();
+        $otherOccurrence = $this->createOccurrence($otherSchedule, '2031-01-06');
+
+        SupervisionAssignment::create([
+            'supervision_stage_id' => $this->stage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $this->occurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+        SupervisionAssignment::create([
+            'supervision_stage_id' => $this->secondStage->id,
+            'target_lecturer_id' => $this->target->id,
+            'supervisor_lecturer_id' => $this->supervisor->id,
+            'teaching_occurrence_id' => $otherOccurrence->id,
+            'assignment_type' => 'AUTO',
+            'status' => 'DRAFT',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(StageFinalizationService::class)->finalize($this->stage, $this->admin);
     }
 
     public function test_partial_finalization_is_rolled_back_when_counterpart_is_missing(): void
@@ -221,6 +494,29 @@ class SchedulingAtomicityTest extends TestCase
         }
         $this->assertNotNull($loadedSchedule->fresh());
         $this->assertSame(10, SchedulingState::findOrFail(1)->revision);
+    }
+
+    private function createOccurrence(TeachingSchedule $schedule, string $date): TeachingOccurrence
+    {
+        return TeachingOccurrence::create([
+            'teaching_schedule_id' => $schedule->id,
+            'original_date' => $date,
+            'occurs_on' => $date,
+            'starts_at' => Carbon::parse($date.' 08:00', 'Asia/Jakarta')->utc(),
+            'ends_at' => Carbon::parse($date.' 09:40', 'Asia/Jakarta')->utc(),
+            'status' => 'SCHEDULED',
+        ]);
+    }
+
+    private function createModeOccurrence(Lecturer $target, string $mode, string $date): TeachingOccurrence
+    {
+        $schedule = $target->teachingSchedules()->firstOrFail()->replicate(['fingerprint']);
+        $schedule->delivery_mode = $mode;
+        $schedule->room_name = $mode === 'ONLINE' ? 'ONLINE' : 'Ruang Offline';
+        $schedule->day_of_week = Carbon::parse($date)->dayOfWeekIso;
+        $schedule->save();
+
+        return $this->createOccurrence($schedule, $date);
     }
 
     public function test_letter_issuance_rechecks_finalized_status_after_waiting_for_parent_locks(): void

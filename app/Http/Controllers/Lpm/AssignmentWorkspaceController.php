@@ -20,7 +20,6 @@ use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
 use App\Models\TeachingOccurrence;
 use App\Services\Scheduling\ApplyRunService;
-use App\Services\Scheduling\ConflictChecker;
 use App\Services\Scheduling\ManualOverrideService;
 use App\Services\Scheduling\PeriodAssignmentPairService;
 use App\Services\Scheduling\SchedulingLockService;
@@ -44,7 +43,6 @@ class AssignmentWorkspaceController extends Controller
     public function __construct(
         protected SolverClientService $solverService,
         protected ApplyRunService $applyRunService,
-        protected ConflictChecker $conflictChecker,
         protected ManualOverrideService $manualOverrideService,
         protected PeriodAssignmentPairService $assignmentPairs,
         protected StageFinalizationService $finalizationService
@@ -441,7 +439,7 @@ class AssignmentWorkspaceController extends Controller
         ]);
 
         try {
-            $this->manualOverrideService->assign(
+            $result = $this->manualOverrideService->assignWithResults(
                 $stage,
                 (int) $validated['target_lecturer_id'],
                 (int) $validated['supervisor_lecturer_id'],
@@ -449,8 +447,14 @@ class AssignmentWorkspaceController extends Controller
                 auth()->user()
             );
 
+            $message = 'Pasangan manual Tahap 1 dan Tahap 2 berhasil disimpan. '.$result['reassigned_count'].' pasangan otomatis disusun ulang di kedua tahap.';
+            if ($result['unassigned_targets'] !== []) {
+                $names = collect($result['unassigned_targets'])->pluck('name')->implode(', ');
+                $message .= ' Belum mendapat jadwal pengganti: '.$names.'.';
+            }
+
             return redirect()->route('lpm.assignments.index', ['stage_id' => $stage->id])
-                ->with('success', 'Pasangan supervisor untuk Tahap 1 dan Tahap 2 berhasil disimpan. Jadwal observasi kedua tahap dibuat terpisah.');
+                ->with('success', $message);
         } catch (ValidationException $e) {
             return back()->with('manual_assignment_conflict', $this->manualConflictMessages($e->errors()['supervisor_lecturer_id'] ?? array_merge(...array_values($e->errors()))));
         } catch (Throwable $e) {
@@ -481,21 +485,11 @@ class AssignmentWorkspaceController extends Controller
             'teaching_occurrence_id' => ['required', 'integer', 'exists:teaching_occurrences,id'],
         ]);
 
-        $occurrence = TeachingOccurrence::with('teachingSchedule')->findOrFail($validated['teaching_occurrence_id']);
-        if ((int) $occurrence->teachingSchedule->lecturer_id !== (int) $validated['target_lecturer_id']) {
-            return response()->json(['valid' => false, 'conflicts' => ['Jadwal perkuliahan tidak sesuai dengan dosen yang dipilih.']], 422);
-        }
-
-        $existingAssignmentId = SupervisionAssignment::query()
-            ->where('supervision_stage_id', $stage->id)
-            ->where('target_lecturer_id', (int) $validated['target_lecturer_id'])
-            ->where('status', '<>', 'CANCELLED')
-            ->value('id');
-        $check = $this->conflictChecker->check(
-            $occurrence,
-            (int) $validated['supervisor_lecturer_id'],
+        $check = $this->manualOverrideService->checkCandidate(
             $stage,
-            $existingAssignmentId ? (int) $existingAssignmentId : null
+            (int) $validated['target_lecturer_id'],
+            (int) $validated['supervisor_lecturer_id'],
+            (int) $validated['teaching_occurrence_id']
         );
 
         return response()->json([

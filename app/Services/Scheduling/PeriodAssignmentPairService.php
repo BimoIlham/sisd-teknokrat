@@ -50,6 +50,61 @@ class PeriodAssignmentPairService
             ->first();
 
         if ($counterpart
+            && $source->assignment_type === 'AUTO'
+            && ($counterpart->assignment_type === 'MANUAL'
+                || $counterpart->assignment_type === 'LOCKED'
+                || $counterpart->is_locked
+                || $this->isStageLocked($counterpartStage, $counterpart))) {
+            $fixedOccurrence = $counterpart->teachingOccurrence;
+            $sourceMatch = $fixedOccurrence
+                ? $this->findCompatibleOccurrence(
+                    $sourceStage,
+                    (int) $source->target_lecturer_id,
+                    (int) $counterpart->supervisor_lecturer_id,
+                    $counterpartStage,
+                    $fixedOccurrence,
+                    $source
+                )
+                : null;
+
+            if (! $sourceMatch || $source->is_locked || $this->isStageLocked($sourceStage, $source)) {
+                throw ValidationException::withMessages([
+                    'supervisor_lecturer_id' => ["{$counterpartStage->name} memiliki pilihan terkunci yang tidak dapat dipasangkan dengan jadwal identik pada {$sourceStage->name}."],
+                ]);
+            }
+
+            $oldValues = [
+                'supervisor_id' => $source->supervisor_lecturer_id,
+                'occurrence_id' => $source->teaching_occurrence_id,
+                'assignment_type' => $source->assignment_type,
+                'is_locked' => $source->is_locked,
+            ];
+            $source->update([
+                'supervisor_lecturer_id' => $counterpart->supervisor_lecturer_id,
+                'teaching_occurrence_id' => $sourceMatch->id,
+                'starts_at' => $sourceMatch->starts_at,
+                'ends_at' => $sourceMatch->ends_at,
+                'assignment_type' => 'MANUAL',
+                'is_locked' => true,
+            ]);
+            AssignmentAudit::create([
+                'supervision_assignment_id' => $source->id,
+                'actor_user_id' => $actor->id,
+                'action' => 'PERIOD_PAIR_ADOPT_FIXED',
+                'old_payload' => $oldValues,
+                'new_payload' => [
+                    'supervisor_id' => $counterpart->supervisor_lecturer_id,
+                    'occurrence_id' => $sourceMatch->id,
+                    'assignment_type' => 'MANUAL',
+                    'is_locked' => true,
+                ],
+                'reason' => $reason,
+            ]);
+            $sourceOccurrence = $sourceMatch;
+            $this->refreshSupervision($source, $sourceOccurrence);
+        }
+
+        if ($counterpart
             && (int) $counterpart->supervisor_lecturer_id !== (int) $source->supervisor_lecturer_id
             && $source->assignment_type !== 'MANUAL') {
             throw ValidationException::withMessages([
@@ -90,7 +145,7 @@ class PeriodAssignmentPairService
         if (! $occurrence) {
             throw ValidationException::withMessages([
                 'supervisor_lecturer_id' => [
-                    "Supervisor yang dipilih tidak memiliki slot observasi yang valid untuk dosen yang sama pada {$counterpartStage->name}.",
+                    "Supervisor yang dipilih tidak memiliki slot dengan jadwal perkuliahan yang sama persis pada {$counterpartStage->name}.",
                 ],
             ]);
         }
@@ -291,6 +346,86 @@ class PeriodAssignmentPairService
         return $assignments->count();
     }
 
+    public function cancelAllEditableAutomaticPairs(SupervisionStage $stage, User $actor, string $reason): int
+    {
+        $movableAssignmentIds = $this->editableAutomaticAssignmentIds($stage);
+        if ($movableAssignmentIds === []) {
+            return 0;
+        }
+
+        $movableAssignments = SupervisionAssignment::query()
+            ->whereIn('id', $movableAssignmentIds)
+            ->with('stage')
+            ->get();
+
+        foreach ($movableAssignments as $assignment) {
+            $oldValues = [
+                'supervisor_id' => $assignment->supervisor_lecturer_id,
+                'occurrence_id' => $assignment->teaching_occurrence_id,
+            ];
+            $assignment->update(['status' => 'CANCELLED']);
+            AssignmentAudit::create([
+                'supervision_assignment_id' => $assignment->id,
+                'actor_user_id' => $actor->id,
+                'action' => 'PERIOD_PAIR_RESET_AUTO',
+                'old_payload' => $oldValues,
+                'reason' => $reason,
+            ]);
+        }
+
+        if ($movableAssignments->isNotEmpty()) {
+            $this->invalidatePendingRunsForPeriod($stage);
+        }
+
+        return $movableAssignments->count();
+    }
+
+    /**
+     * Get active automatic rows whose complete pair can be safely rebuilt.
+     *
+     * @return list<int>
+     */
+    public function editableAutomaticAssignmentIds(SupervisionStage $stage): array
+    {
+        $stage->loadMissing('supervisionPeriod.stages');
+        $stageIds = $stage->supervisionPeriod->stages
+            ->whereIn('stage_no', [1, 2])
+            ->pluck('id');
+        $assignments = SupervisionAssignment::query()
+            ->whereIn('supervision_stage_id', $stageIds)
+            ->where('status', '<>', 'CANCELLED')
+            ->with('stage')
+            ->get();
+
+        if ($assignments->isEmpty()) {
+            return [];
+        }
+
+        $submittedAssignmentIds = Supervision::query()
+            ->whereIn('supervision_assignment_id', $assignments->modelKeys())
+            ->where('status', 'SUBMITTED')
+            ->pluck('supervision_assignment_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $automaticTargetIds = $assignments
+            ->groupBy('target_lecturer_id')
+            ->filter(fn (Collection $targetAssignments): bool => $targetAssignments->every(
+                fn (SupervisionAssignment $assignment): bool => $assignment->assignment_type === 'AUTO'
+                    && ! $assignment->is_locked
+                    && $assignment->status === 'DRAFT'
+                    && ! $assignment->stage?->is_finalized
+                    && ! in_array($assignment->id, $submittedAssignmentIds, true)
+            ))
+            ->keys();
+
+        return $assignments
+            ->whereIn('target_lecturer_id', $automaticTargetIds)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
     public function invalidatePendingRunsForPeriod(SupervisionStage $stage): void
     {
         $stage->loadMissing('supervisionPeriod.stages');
@@ -317,7 +452,8 @@ class PeriodAssignmentPairService
         }
 
         $occurrence = $counterpart->teachingOccurrence;
-        if ((int) $occurrence->teachingSchedule?->lecturer_id !== (int) $source->target_lecturer_id) {
+        if (! $sourceOccurrence->hasSameSupervisionSlotAs($occurrence)
+            || (int) $occurrence->teachingSchedule?->lecturer_id !== (int) $source->target_lecturer_id) {
             return null;
         }
         if (! $this->respectsStageOrder($counterpartStage, $occurrence, $source->stage, $sourceOccurrence)) {
@@ -360,6 +496,10 @@ class PeriodAssignmentPairService
             ]);
 
         foreach ($occurrences as $occurrence) {
+            if (! $sourceOccurrence->hasSameSupervisionSlotAs($occurrence)) {
+                continue;
+            }
+
             if (! $this->respectsStageOrder($stage, $occurrence, $sourceStage, $sourceOccurrence)) {
                 continue;
             }

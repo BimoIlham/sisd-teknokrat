@@ -187,7 +187,7 @@
                         <th class="px-5 py-3.5">Tahap 2</th>
                         <th class="px-5 py-3.5 text-center">Penugasan</th>
                         <th class="px-5 py-3.5 text-center">Status</th>
-                        <th class="px-5 py-3.5 text-right">Aksi</th>
+                        <th class="px-5 py-3.5 text-center">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -243,8 +243,8 @@
                             </td>
 
                             <!-- Aksi -->
-                            <td class="px-5 py-4 text-right">
-                                <div class="flex items-center justify-end gap-1.5">
+                            <td class="px-5 py-4 text-center">
+                                <div class="flex items-center justify-center gap-1.5">
                                     <!-- Toggle Status Button -->
                                     <form id="toggle-form-{{ $period->id }}" action="{{ route('lpm.periods.toggle_status', $period) }}" method="POST">
                                         @csrf
@@ -253,22 +253,22 @@
                                                 type="button" 
                                                 data-period-name="{{ $period->name }}"
                                                 @click="confirmToggle('toggle-form-{{ $period->id }}', true, $el.dataset.periodName)"
-                                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 text-[11px] font-semibold transition-colors cursor-pointer"
-                                                title="Tutup Periode Supervisi"
+                                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                                                aria-label="Tutup periode {{ $period->name }}"
+                                                title="Tutup periode {{ $period->name }}"
                                             >
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
-                                                <span>Tutup</span>
+                                                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
                                             </button>
                                         @else
                                             <button 
                                                 type="button" 
                                                 data-period-name="{{ $period->name }}"
                                                 @click="confirmToggle('toggle-form-{{ $period->id }}', false, $el.dataset.periodName)"
-                                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold transition-colors cursor-pointer"
-                                                title="Jadikan Periode Aktif Utama"
+                                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300 text-emerald-700 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                                aria-label="Aktifkan periode {{ $period->name }}"
+                                                title="Aktifkan periode {{ $period->name }}"
                                             >
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                <span>Aktifkan</span>
+                                                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                             </button>
                                         @endif
                                     </form>
@@ -288,11 +288,11 @@
                                             'status' => $period->status,
                                         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}"
                                         @click="openEdit(JSON.parse($el.dataset.period))" 
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 text-[11px] font-semibold transition-colors cursor-pointer"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
                                         aria-label="Edit periode {{ $period->name }}"
+                                        title="Edit periode {{ $period->name }}"
                                     >
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                                        <span>Edit</span>
+                                        <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                     </button>
 
                                     <!-- Delete Button (Only for Closed periods) -->
@@ -304,10 +304,11 @@
                                                 type="button" 
                                                 data-period-name="{{ $period->name }}"
                                                 @click="confirmDelete('delete-form-{{ $period->id }}', $el.dataset.periodName)"
-                                                class="inline-flex items-center p-1 rounded-lg border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                                title="Hapus Periode Ini"
+                                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                                                aria-label="Hapus periode {{ $period->name }}"
+                                                title="Hapus periode {{ $period->name }}"
                                             >
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                             </button>
                                         </form>
                                     @endif
@@ -315,10 +316,11 @@
                                     <!-- Detail Link -->
                                     <a 
                                         href="{{ route('lpm.periods.show', $period) }}" 
-                                        class="inline-flex items-center px-2 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-[11px] font-medium transition-colors"
-                                        title="Lihat Detail Periode"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]"
+                                        aria-label="Lihat detail periode {{ $period->name }}"
+                                        title="Lihat detail periode {{ $period->name }}"
                                     >
-                                        Detail &rarr;
+                                        <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.5" stroke-width="2" /></svg>
                                     </a>
                                 </div>
                             </td>

@@ -53,7 +53,7 @@ class StageFinalizationService
                 $assignments = SupervisionAssignment::query()
                     ->where('supervision_stage_id', $periodStage->id)
                     ->where('status', '<>', 'CANCELLED')
-                    ->with('teachingOccurrence')
+                    ->with('teachingOccurrence.teachingSchedule')
                     ->get()
                     ->keyBy('target_lecturer_id');
 
@@ -84,9 +84,10 @@ class StageFinalizationService
                     || (int) $stageOneAssignment->supervisor_lecturer_id !== (int) $stageTwoAssignment->supervisor_lecturer_id
                     || ! $stageOneAssignment->teachingOccurrence
                     || ! $stageTwoAssignment->teachingOccurrence
+                    || ! $stageOneAssignment->teachingOccurrence->hasSameSupervisionSlotAs($stageTwoAssignment->teachingOccurrence)
                     || $stageTwoAssignment->teachingOccurrence->occurs_on->toDateString() <= $stageOneAssignment->teachingOccurrence->occurs_on->toDateString()) {
                     throw ValidationException::withMessages([
-                        'stage' => ['Finalisasi gagal: Pastikan setiap dosen memiliki supervisor yang sama pada kedua tahap dan tanggal observasi Tahap 2 setelah Tahap 1.'],
+                        'stage' => ['Finalisasi gagal: Pastikan setiap dosen memiliki supervisor dan jadwal perkuliahan yang sama persis pada kedua tahap, serta tanggal Tahap 2 setelah Tahap 1.'],
                     ]);
                 }
             }

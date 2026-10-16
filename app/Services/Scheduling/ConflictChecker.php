@@ -128,7 +128,8 @@ class ConflictChecker
         TeachingOccurrence $occurrence,
         int $supervisorLecturerId,
         SupervisionStage $stage,
-        ?int $ignoredAssignmentId = null
+        ?int $ignoredAssignmentId = null,
+        array $ignoredAssignmentIds = []
     ): array {
         $conflicts = [];
         $targetLecturerId = $occurrence->teachingSchedule->lecturer_id;
@@ -170,6 +171,7 @@ class ConflictChecker
         // H04: Supervisor cannot have concurrent supervision assignment
         $supervisorSupervisionConflicts = $this->assignmentsForSupervisor($supervisorLecturerId)->contains(
             fn (SupervisionAssignment $assignment) => $assignment->id !== $ignoredAssignmentId
+                && ! in_array($assignment->id, $ignoredAssignmentIds, true)
                 && $assignment->teaching_occurrence_id !== $occurrence->id
                 && $assignment->starts_at < $occurrence->ends_at
                 && $assignment->ends_at > $occurrence->starts_at

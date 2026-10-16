@@ -18,7 +18,8 @@ class ManualOverrideService
     public function __construct(
         protected ConflictChecker $conflictChecker,
         protected PeriodAssignmentPairService $assignmentPairs,
-        protected SchedulingLockService $locks
+        protected SchedulingLockService $locks,
+        protected AutomaticPeriodRescheduler $automaticRescheduler
     ) {}
 
     /**
@@ -28,7 +29,24 @@ class ManualOverrideService
      */
     public function assign(SupervisionStage $stage, int $targetLecturerId, int $supervisorLecturerId, int $occurrenceId, User $actor): SupervisionAssignment
     {
-        return DB::transaction(function () use ($stage, $targetLecturerId, $supervisorLecturerId, $occurrenceId, $actor): SupervisionAssignment {
+        return $this->assignWithResults($stage, $targetLecturerId, $supervisorLecturerId, $occurrenceId, $actor)['assignment'];
+    }
+
+    /**
+     * @return array{
+     *     assignment: SupervisionAssignment,
+     *     reassigned_count: int,
+     *     unassigned_targets: list<array{lecturer_id: int, name: string}>
+     * }
+     */
+    public function assignWithResults(
+        SupervisionStage $stage,
+        int $targetLecturerId,
+        int $supervisorLecturerId,
+        int $occurrenceId,
+        User $actor
+    ): array {
+        return DB::transaction(function () use ($stage, $targetLecturerId, $supervisorLecturerId, $occurrenceId, $actor): array {
             $state = $this->locks->state();
             $stage = $this->locks->stage($stage->id);
             $this->locks->assignments($stage->supervisionPeriod);
@@ -76,12 +94,14 @@ class ManualOverrideService
                 ]);
             }
 
-            // Check hard constraints H01-H08
-            $existing = SupervisionAssignment::query()
-                ->where('supervision_stage_id', $stage->id)
-                ->where('target_lecturer_id', $targetLecturerId)
-                ->where('status', '<>', 'CANCELLED')
-                ->first();
+            $this->assignmentPairs->cancelAllEditableAutomaticPairs(
+                $stage,
+                $actor,
+                'Penjadwalan ulang otomatis setelah pilihan manual disimpan.'
+            );
+
+            // Check hard constraints H01-H08 after movable automatic assignments are cleared.
+            $existing = $this->activeAssignment($stage, $targetLecturerId);
             $this->conflictChecker->reset();
             $check = $this->conflictChecker->check($occurrence, $supervisorLecturerId, $stage, $existing?->id);
             if (! $check['valid']) {
@@ -163,12 +183,80 @@ class ManualOverrideService
                 $actor,
                 'Sinkronisasi pasangan Tahap 1 dan Tahap 2 dari penugasan manual.'
             );
+            $rebalance = $this->automaticRescheduler->reschedule(
+                $stage,
+                $actor,
+                'Penjadwalan ulang otomatis setelah pilihan manual disimpan.'
+            );
             $this->assignmentPairs->invalidatePendingRunsForPeriod($stage);
 
             // Bump scheduling state revision
             $this->locks->bump($state);
 
-            return $assignment;
+            return [
+                'assignment' => $assignment,
+                'reassigned_count' => $rebalance['reassigned_count'],
+                'unassigned_targets' => $rebalance['unassigned_targets'],
+            ];
         }, 3);
+    }
+
+    /**
+     * Check a manual candidate while ignoring only automatic pairs that will be rebuilt on save.
+     *
+     * @return array{valid: bool, conflicts: list<string>, displaced_count: int}
+     */
+    public function checkCandidate(
+        SupervisionStage $stage,
+        int $targetLecturerId,
+        int $supervisorLecturerId,
+        int $occurrenceId
+    ): array {
+        $occurrence = TeachingOccurrence::query()
+            ->with('teachingSchedule')
+            ->findOrFail($occurrenceId);
+        if ((int) $occurrence->teachingSchedule->lecturer_id !== $targetLecturerId) {
+            return [
+                'valid' => false,
+                'conflicts' => ['Jadwal perkuliahan tidak sesuai dengan dosen yang dipilih.'],
+                'displaced_count' => 0,
+            ];
+        }
+
+        $ignoredAssignmentIds = $this->assignmentPairs->editableAutomaticAssignmentIds($stage);
+        $existing = $this->activeAssignment($stage, $targetLecturerId);
+        $this->conflictChecker->reset();
+        $check = $this->conflictChecker->check(
+            $occurrence,
+            $supervisorLecturerId,
+            $stage,
+            $existing?->id,
+            $ignoredAssignmentIds
+        );
+        $displacedTargetIds = SupervisionAssignment::query()
+            ->whereIn('id', $ignoredAssignmentIds)
+            ->where('supervisor_lecturer_id', $supervisorLecturerId)
+            ->where('teaching_occurrence_id', '<>', $occurrence->id)
+            ->where('starts_at', '<', $occurrence->ends_at)
+            ->where('ends_at', '>', $occurrence->starts_at)
+            ->pluck('target_lecturer_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->reject(fn (int $id): bool => $id === $targetLecturerId);
+
+        return [
+            'valid' => $check['valid'],
+            'conflicts' => $check['conflicts'],
+            'displaced_count' => $displacedTargetIds->count(),
+        ];
+    }
+
+    private function activeAssignment(SupervisionStage $stage, int $targetLecturerId): ?SupervisionAssignment
+    {
+        return SupervisionAssignment::query()
+            ->where('supervision_stage_id', $stage->id)
+            ->where('target_lecturer_id', $targetLecturerId)
+            ->where('status', '<>', 'CANCELLED')
+            ->first();
     }
 }

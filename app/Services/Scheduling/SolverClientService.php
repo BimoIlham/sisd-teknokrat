@@ -93,6 +93,7 @@ class SolverClientService
                 'target_lecturer_id' => $a->target_lecturer_id,
                 'supervisor_lecturer_id' => $a->supervisor_lecturer_id,
                 'occurrence_id' => $a->teaching_occurrence_id,
+                'schedule_identity' => $a->teachingOccurrence?->teachingSchedule?->supervisionIdentity(),
             ])->toArray(),
         ];
 
@@ -203,6 +204,7 @@ class SolverClientService
                 'supervisor_lecturer_id' => $supId,
                 'occurrence_id' => $la->teaching_occurrence_id,
                 'assignment_type' => $la->assignment_type,
+                'schedule_identity' => $occ?->teachingSchedule?->supervisionIdentity(),
                 'date' => $date,
                 'start_time' => $startTime,
                 'end_time' => $endTime,
@@ -316,6 +318,7 @@ class SolverClientService
                     'supervisor_lecturer_id' => $supId,
                     'occurrence_id' => $selected['occurrence_id'],
                     'assignment_type' => 'AUTO',
+                    'schedule_identity' => $selected['schedule_identity'],
                     'date' => $selected['date'] ?? null,
                     'start_time' => $selected['start_time'] ?? null,
                     'end_time' => $selected['end_time'] ?? null,

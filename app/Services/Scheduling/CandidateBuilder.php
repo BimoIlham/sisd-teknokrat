@@ -47,12 +47,14 @@ class CandidateBuilder
 
         $counterpartOrder = $stage->stage_order === 1 ? 2 : 1;
         $counterpartStage = $period->stages->firstWhere('stage_order', $counterpartOrder);
-        $pairedSupervisorByTarget = $counterpartStage
+        $pairedAssignmentsByTarget = $counterpartStage
             ? SupervisionAssignment::query()
                 ->where('supervision_stage_id', $counterpartStage->id)
                 ->where('status', '<>', 'CANCELLED')
                 ->whereIn('target_lecturer_id', $targetLecturerIds)
-                ->pluck('supervisor_lecturer_id', 'target_lecturer_id')
+                ->with('teachingOccurrence.teachingSchedule')
+                ->get()
+                ->keyBy('target_lecturer_id')
             : collect();
 
         // Occurrences within stage date range for target lecturers
@@ -82,7 +84,13 @@ class CandidateBuilder
             $endTime = $occ->end_time_local;
             $startsAt = $occ->starts_at?->toIso8601String();
             $endsAt = $occ->ends_at?->toIso8601String();
-            $pairedSupervisorId = $pairedSupervisorByTarget->get($targetId);
+            $pairedAssignment = $pairedAssignmentsByTarget->get($targetId);
+            $pairedOccurrence = $pairedAssignment?->teachingOccurrence;
+            if ($pairedAssignment && (! $pairedOccurrence || ! $occ->hasSameSupervisionSlotAs($pairedOccurrence))) {
+                continue;
+            }
+
+            $pairedSupervisorId = $pairedAssignment?->supervisor_lecturer_id;
             $eligibleSupervisors = $pairedSupervisorId
                 ? $supervisors->where('lecturer_id', $pairedSupervisorId)
                 : $supervisors;
@@ -106,9 +114,13 @@ class CandidateBuilder
                         'end_time' => $endTime,
                         'starts_at' => $startsAt,
                         'ends_at' => $endsAt,
+                        'course_id' => (int) $schedule->course_id,
                         'course_code' => $schedule->course->code,
                         'course_name' => $schedule->course->name,
+                        'class_name' => $schedule->class_name,
+                        'schedule_identity' => $schedule->supervisionIdentity(),
                         'room' => $schedule->room_display,
+                        'room_name' => $schedule->room_name,
                         'delivery_mode' => $schedule->delivery_mode,
                     ];
                 }
