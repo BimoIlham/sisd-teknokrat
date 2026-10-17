@@ -22,7 +22,7 @@
             </p>
         </div>
 
-        @if($lecturer && $period && auth()->user()->isSuperadmin())
+        @if($lecturer && $period && auth()->user()->isLpmStaff())
             <a href="{{ route('supervisor.schedule.pdf') }}" target="_blank" class="inline-flex items-center justify-center rounded-xl bg-[#7B1113] px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#5E0C0F]">
                 <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 Unduh Jadwal Resmi (PDF)

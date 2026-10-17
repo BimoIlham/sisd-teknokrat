@@ -13,7 +13,7 @@ class LegacySupervisorCredentialInspector
         return $knownPassword !== ''
             && $user->lecturer_id !== null
             && $user->hasRole('supervisor')
-            && ! $user->hasRole('superadmin')
+            && ! $user->isLpmStaff()
             && Hash::check($knownPassword, $user->password);
     }
 }

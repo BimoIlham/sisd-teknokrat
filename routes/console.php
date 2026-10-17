@@ -8,11 +8,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::command('app:retry-pending-file-deletions')->hourly()->withoutOverlapping();
 
 Artisan::command('app:reset-schedule-data {--keep-academic-master : Pertahankan mata kuliah, tahun akademik, dan kalender akademik}', function (): int {
     $tables = [
@@ -50,7 +53,7 @@ Artisan::command('app:reset-schedule-data {--keep-academic-master : Pertahankan 
         ScheduleImport::where('status', 'COMMITTED')->each(fn ($import) => $references->rememberImport($import));
         $lecturerUsers = User::query()
             ->whereNotNull('lecturer_id')
-            ->whereDoesntHave('roles', fn (Builder $roles): Builder => $roles->where('name', 'superadmin'))
+            ->whereDoesntHave('roles', fn (Builder $roles): Builder => $roles->whereIn('name', ['superadmin', 'lpm_admin']))
             ->get();
         $files = DB::table('schedule_imports')->select('storage_disk', 'stored_path as file_path')->get()
             ->concat(DB::table('supervision_evidence')->select('storage_disk', 'file_path')->whereNotNull('file_path')->get())

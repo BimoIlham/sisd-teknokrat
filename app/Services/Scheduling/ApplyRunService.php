@@ -185,7 +185,8 @@ class ApplyRunService
             ->whereHas('lecturer', fn ($query) => $query->where('is_active', true))->exists();
         $occurrence = TeachingOccurrence::query()->with('teachingSchedule')->find($occurrenceId);
         if (! $targetIsActive || ! $supervisorIsActive || ! $occurrence
-            || (int) $occurrence->teachingSchedule?->lecturer_id !== $targetId) {
+            || (int) $occurrence->teachingSchedule?->lecturer_id !== $targetId
+            || (int) $occurrence->teachingSchedule?->supervision_period_id !== (int) $stage->supervision_period_id) {
             throw new ConflictHttpException('Usulan sudah tidak sesuai dengan data penjadwalan. Buat usulan baru.');
         }
         $this->conflictChecker->reset();

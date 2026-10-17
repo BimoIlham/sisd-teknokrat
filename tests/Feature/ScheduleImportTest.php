@@ -12,6 +12,7 @@ use App\Models\SupervisionPeriod;
 use App\Models\TeachingOccurrence;
 use App\Models\TeachingSchedule;
 use App\Models\User;
+use App\Services\ScheduleImport\LecturerIdentityResolver;
 use App\Services\ScheduleImport\ScheduleCommitService;
 use App\Services\ScheduleImport\ScheduleImportService;
 use Database\Seeders\RoleAndPermissionSeeder;
@@ -102,7 +103,7 @@ class ScheduleImportTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [
                 ['confidence' => 0.98, 'normalized' => $payload],
                 ['confidence' => 0.98, 'normalized' => array_replace($payload, [
@@ -137,10 +138,11 @@ class ScheduleImportTest extends TestCase
     public function test_reuploading_committed_pdf_reports_existing_active_schedules_and_previous_skipped_rows(): void
     {
         Storage::fake('local');
+        $this->createActiveImportPeriod();
         $payload = $this->validOnlinePayload();
         $this->createImportLecturer($payload['lecturer_name']);
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [
                 ['confidence' => 0.98, 'normalized' => $payload],
                 ['confidence' => 0.98, 'normalized' => array_replace($payload, ['course_name' => 'Aplikasi Komputer ◆'])],
@@ -160,10 +162,9 @@ class ScheduleImportTest extends TestCase
         ]);
 
         $response->assertRedirect(route('lpm.lecturers.index'))
-            ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'sudah pernah diunggah')
-                && str_contains($message, '1 jadwal dari unggahan sebelumnya masih aktif')
-                && ! str_contains($message, 'baris sebelumnya dilewati')
-                && ! str_contains($message, 'Upload selesai: 0 jadwal aktif'));
+            ->assertSessionHas('skipped_count', 1)
+            ->assertSessionHas('success', fn (string $message): bool => str_contains($message, '1 jadwal aktif')
+                && str_contains($message, '1 baris dilewati'));
         $this->assertSame(1, ScheduleImport::count());
         $this->assertSame(1, TeachingSchedule::count());
         Http::assertSentCount(1);
@@ -172,8 +173,9 @@ class ScheduleImportTest extends TestCase
     public function test_pdf_upload_with_no_confident_rows_returns_to_upload_page_without_activating_schedules(): void
     {
         Storage::fake('local');
+        $this->createActiveImportPeriod();
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [[
                 'normalized' => array_replace($this->validOnlinePayload(), ['lecturer_name' => 'Nama Tidak Terdaftar']),
             ]],
@@ -185,7 +187,7 @@ class ScheduleImportTest extends TestCase
             'schedule_pdf' => UploadedFile::fake()->createWithContent('jadwal-tidak-yakin.pdf', '%PDF-1.7 no-safe-rows'),
         ]);
 
-        $response->assertRedirect(route('lpm.import.index'))
+        $response->assertRedirect(route('lpm.import.names.show', ScheduleImport::sole()))
             ->assertSessionHas('error', 'Tidak ada baris jadwal yang dapat diaktifkan. 1 baris tidak cocok dengan dosen aktif di Direktori Dosen; 1 baris memiliki hasil pembacaan PDF yang kurang yakin.');
         $this->assertSame(0, TeachingSchedule::count());
         $this->assertSame('PENDING_REVIEW', ScheduleImport::sole()->status);
@@ -194,10 +196,11 @@ class ScheduleImportTest extends TestCase
     public function test_pdf_upload_explains_when_all_rows_have_invalid_schedule_fields(): void
     {
         Storage::fake('local');
+        $this->createActiveImportPeriod();
         $payload = array_replace($this->validOnlinePayload(), ['start_time' => null, 'end_time' => null]);
         $this->createImportLecturer($payload['lecturer_name']);
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [['confidence' => 0.98, 'normalized' => $payload]],
             'page_count' => 1,
         ])]);
@@ -305,7 +308,7 @@ class ScheduleImportTest extends TestCase
     {
         $invalidLecturerCount = Lecturer::whereIn('name', ['---', 'Dosen Pengampu'])->count();
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [
                 ['normalized' => ['lecturer_name' => '---', 'course_name' => '---']],
                 ['normalized' => ['lecturer_name' => 'Dosen Pengampu', 'course_name' => 'Metode Penelitian']],
@@ -344,7 +347,7 @@ class ScheduleImportTest extends TestCase
             'course_name' => 'Aplikasi Komputer â€“ Teori',
         ]);
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [
                 ['normalized' => $symbolPayload, 'confidence' => 0.98],
                 ['normalized' => $encodingPayload, 'confidence' => 0.98],
@@ -390,7 +393,7 @@ class ScheduleImportTest extends TestCase
         ]);
 
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [[
                 'confidence' => 0.95,
                 'normalized' => [
@@ -434,9 +437,9 @@ class ScheduleImportTest extends TestCase
         );
         $ambiguousRow = $ambiguousImport->rows()->sole();
 
-        $this->assertNull($ambiguousRow->matched_lecturer_id);
-        $this->assertSame('AMBIGUOUS', $ambiguousRow->validation_status);
-        $this->assertFalse($ambiguousRow->is_approved);
+        $this->assertSame($lecturer->id, $ambiguousRow->matched_lecturer_id);
+        $this->assertSame('VALID', $ambiguousRow->validation_status);
+        $this->assertTrue($ambiguousRow->is_approved);
     }
 
     public function test_commit_staging_rows_creates_teaching_schedules_and_occurrences(): void
@@ -539,7 +542,7 @@ class ScheduleImportTest extends TestCase
             'lecturer_name' => $pdfName, 'class_name' => 'IF 26 A',
         ]);
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [[
                 'confidence' => 0.95, 'normalized' => $payload,
                 'raw' => ['lecturer' => $pdfName],
@@ -550,25 +553,26 @@ class ScheduleImportTest extends TestCase
             $this->term, $this->admin
         );
         $row = $import->rows()->sole();
-        $this->assertSame($lecturer->id, $row->matched_lecturer_id);
+        $this->assertNull($row->matched_lecturer_id);
         $this->assertSame($pdfName, $row->fresh()->parsed_lecturer_name);
-        $this->assertSame(1, app(ScheduleCommitService::class)->commit($import->fresh()));
+        $this->actingAs($this->admin)->post(route('lpm.import.names.resolve', [$import, $row]), ['action' => 'same', 'lecturer_id' => $lecturer->id])
+            ->assertRedirect(route('lpm.import.names.show', $import));
 
         $lecturer->refresh();
-        $this->assertSame($pdfName, $lecturer->name);
-        $this->assertSame(mb_strtolower($pdfName), $lecturer->normalized_name);
+        $this->assertSame('Reflan Nauri Uji', $lecturer->name);
+        $this->assertSame('reflan nauri uji', $lecturer->normalized_name);
         $this->assertSame('0123456784', $lecturer->nidn);
         $this->assertNull($lecturer->study_program_id);
         $this->assertNull($lecturer->faculty_id);
         $schedule = TeachingSchedule::where('source_import_id', $import->id)->sole();
         $this->assertSame($lecturer->id, $schedule->lecturer_id);
         $this->assertSame('IF', $schedule->studyProgram->code);
-        $this->assertSame($pdfName, $schedule->occurrences()->firstOrFail()->identity_snapshot['lecturer_name']);
-        $this->assertSame('schedule_pdf', $lecturer->identity_sources['name']['source']);
+        $this->assertSame('Reflan Nauri Uji', $schedule->occurrences()->firstOrFail()->identity_snapshot['lecturer_name']);
+        $this->assertNull($lecturer->identity_sources['name'] ?? null);
 
         $shorterPdfName = 'Reflan Nuari Uji, M.Kom.';
         Http::fake(['*' => Http::response([
-            'parser' => ['version' => '1.1.0'],
+            'parser' => ['version' => '1.3.0'],
             'rows' => [[
                 'confidence' => 0.95,
                 'normalized' => array_replace($payload, ['lecturer_name' => $shorterPdfName]),
@@ -579,8 +583,8 @@ class ScheduleImportTest extends TestCase
             UploadedFile::fake()->createWithContent('reflan-short-title.pdf', '%PDF-1.7 shorter-pdf-title-test'),
             $this->term, $this->admin
         );
-        $this->assertSame(1, app(ScheduleCommitService::class)->commit($laterImport));
-        $this->assertSame($pdfName, $lecturer->fresh()->name);
+        $this->assertNull(app(LecturerIdentityResolver::class)->resolve($shorterPdfName));
+        $this->assertSame('Reflan Nauri Uji', $lecturer->fresh()->name);
         $this->assertSame('0123456784', $lecturer->fresh()->nidn);
     }
 
@@ -589,7 +593,7 @@ class ScheduleImportTest extends TestCase
         Storage::fake('local');
         $payload = $this->validOnlinePayload();
         $this->createImportLecturer($payload['lecturer_name']);
-        Http::fake(['*' => Http::response(['parser' => ['version' => '1.1.0'], 'rows' => [
+        Http::fake(['*' => Http::response(['parser' => ['version' => '1.3.0'], 'rows' => [
             ['normalized' => $payload, 'source' => ['page' => 69], 'raw' => ['cell_text' => "TS 26 A, TS 26 B,\nTI 26 A\nAplikasi Komputer\n(Teori)\nONLINE 2"], 'confidence' => 0.95, 'issues' => []],
         ]])]);
         $file = UploadedFile::fake()->createWithContent('online.pdf', '%PDF-1.7 online-test');
@@ -609,7 +613,7 @@ class ScheduleImportTest extends TestCase
     {
         Storage::fake('local');
         $this->createImportLecturer($this->validOnlinePayload()['lecturer_name']);
-        Http::fake(['*' => Http::response(['parser' => ['version' => '1.1.0'], 'rows' => [
+        Http::fake(['*' => Http::response(['parser' => ['version' => '1.3.0'], 'rows' => [
             ['normalized' => array_replace($this->validOnlinePayload(), ['delivery_mode' => null, 'room_name' => null])],
             ['normalized' => $this->validOnlinePayload(), 'issues' => [
                 ['code' => 'CONFLICTING_MODE', 'severity' => 'ERROR', 'message' => 'Penanda online dan offline bertentangan.'],
@@ -634,7 +638,7 @@ class ScheduleImportTest extends TestCase
     {
         Storage::fake('local');
         $this->createImportLecturer($this->validOnlinePayload()['lecturer_name']);
-        Http::fake(['*' => Http::response(['parser' => ['version' => '1.1.0'], 'rows' => [
+        Http::fake(['*' => Http::response(['parser' => ['version' => '1.3.0'], 'rows' => [
             ['confidence' => 0.95, 'normalized' => array_replace($this->validOnlinePayload(), ['course_name' => 'Pemrograman Dasar'])],
             ['confidence' => 0.95, 'normalized' => array_replace($this->validOnlinePayload(), ['course_name' => 'Pemrograman Berorientasi Objek'])],
         ]])]);
@@ -650,7 +654,7 @@ class ScheduleImportTest extends TestCase
     public function test_parser_rows_without_confidence_are_not_automatically_activated(): void
     {
         Storage::fake('local');
-        Http::fake(['*' => Http::response(['parser' => ['version' => '1.1.0'], 'rows' => [
+        Http::fake(['*' => Http::response(['parser' => ['version' => '1.3.0'], 'rows' => [
             ['normalized' => $this->validOnlinePayload()],
         ]])]);
         $import = app(ScheduleImportService::class)->import(
@@ -682,6 +686,18 @@ class ScheduleImportTest extends TestCase
             'name' => $name,
             'normalized_name' => mb_strtolower($name),
             'is_active' => true,
+        ]);
+    }
+
+    private function createActiveImportPeriod(): SupervisionPeriod
+    {
+        return SupervisionPeriod::create([
+            'academic_term_id' => $this->term->id,
+            'name' => 'Periode Impor Aktif',
+            'starts_on' => $this->term->starts_on,
+            'ends_on' => $this->term->ends_on,
+            'status' => 'ACTIVE',
+            'created_by' => $this->admin->id,
         ]);
     }
 

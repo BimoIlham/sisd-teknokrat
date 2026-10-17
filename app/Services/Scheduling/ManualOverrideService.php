@@ -88,7 +88,8 @@ class ManualOverrideService
             $occurrence = TeachingOccurrence::with('teachingSchedule')->findOrFail($occurrenceId);
 
             // Verify that occurrence belongs to target lecturer
-            if ($occurrence->teachingSchedule->lecturer_id !== $targetLecturerId) {
+            if ($occurrence->teachingSchedule->lecturer_id !== $targetLecturerId
+                || (int) $occurrence->teachingSchedule->supervision_period_id !== (int) $periodId) {
                 throw ValidationException::withMessages([
                     'occurrence_id' => ['Slot jadwal mengajar yang dipilih bukan milik dosen target yang bersangkutan.'],
                 ]);
@@ -215,7 +216,8 @@ class ManualOverrideService
         $occurrence = TeachingOccurrence::query()
             ->with('teachingSchedule')
             ->findOrFail($occurrenceId);
-        if ((int) $occurrence->teachingSchedule->lecturer_id !== $targetLecturerId) {
+        if ((int) $occurrence->teachingSchedule->lecturer_id !== $targetLecturerId
+            || (int) $occurrence->teachingSchedule->supervision_period_id !== (int) $stage->supervision_period_id) {
             return [
                 'valid' => false,
                 'conflicts' => ['Jadwal perkuliahan tidak sesuai dengan dosen yang dipilih.'],

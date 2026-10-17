@@ -7,6 +7,7 @@ use App\Models\PeriodTarget;
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
+use App\Services\OrganizationalScope;
 use App\Services\Reporting\SupervisionResultPdfService;
 use App\Services\Reporting\SupervisorNoteClassifier;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class ExecutiveReportController extends Controller
 {
     public function index(Request $request): View
     {
+        $scope = $request->routeIs('unit.*') ? new OrganizationalScope($request->user()) : null;
         $periods = SupervisionPeriod::query()
             ->with(['academicTerm', 'stages'])
             ->latest('starts_on')
@@ -37,6 +39,7 @@ class ExecutiveReportController extends Controller
             ->where('status', 'SUBMITTED')
             ->whereHas('assignment', fn ($query) => $query->where('status', '<>', 'CANCELLED'))
             ->whereHas('assignment.supervisionStage', fn ($query) => $query->whereIn('id', $stageIds))
+            ->when($scope, fn ($query) => $scope->supervisions($query))
             ->with([
                 'assignment.targetLecturer:id,name,external_code',
                 'assignment.supervisionStage:id,supervision_period_id,stage_no',
@@ -55,6 +58,7 @@ class ExecutiveReportController extends Controller
         $targetCount = PeriodTarget::query()
             ->where('supervision_period_id', $selectedPeriod?->id)
             ->where('scope_status', 'INCLUDED')
+            ->when($scope, fn ($query) => $scope->targets($query))
             ->distinct('lecturer_id')
             ->count('lecturer_id');
 
@@ -88,8 +92,10 @@ class ExecutiveReportController extends Controller
             'selectedStage' => $selectedStage,
             'reportScope' => $reportScope,
             'reportLabel' => $selectedPeriod
-                ? $selectedPeriod->semester_display.' · '.($selectedStage === 'all' ? 'Tahap 1 dan Tahap 2' : 'Tahap '.$selectedStage)
+                ? ($scope ? $scope->label().' · ' : '').$selectedPeriod->semester_display.' · '.($selectedStage === 'all' ? 'Tahap 1 dan Tahap 2' : 'Tahap '.$selectedStage)
                 : 'Belum ada semester supervisi',
+            'reportRoute' => $scope ? 'unit.reports.supervision' : 'lpm.reports.supervision',
+            'publisherLabel' => $scope ? $scope->roleLabel().' '.$scope->label() : 'Lembaga Penjaminan Mutu (LPM)',
             'summary' => $summary,
             'top10T1' => $top10T1,
             'bottom10T1' => $bottom10T1,

@@ -10,6 +10,7 @@ class TeachingSchedule extends Model
 {
     protected $fillable = [
         'academic_term_id',
+        'supervision_period_id',
         'lecturer_id',
         'course_id',
         'faculty_id',
@@ -47,9 +48,19 @@ class TeachingSchedule extends Model
         return $this->belongsTo(AcademicTerm::class);
     }
 
+    public function supervisionPeriod(): BelongsTo
+    {
+        return $this->belongsTo(SupervisionPeriod::class);
+    }
+
     protected static function booted(): void
     {
         static::creating(function ($schedule) {
+            if (! $schedule->supervision_period_id) {
+                $schedule->supervision_period_id = $schedule->source_import_id
+                    ? ScheduleImport::whereKey($schedule->source_import_id)->value('supervision_period_id')
+                    : SupervisionPeriod::where('academic_term_id', $schedule->academic_term_id)->where('status', 'ACTIVE')->value('id');
+            }
             if (! $schedule->effective_from) {
                 $term = AcademicTerm::find($schedule->academic_term_id);
                 $schedule->effective_from = $term?->starts_on ?? '2026-09-01';

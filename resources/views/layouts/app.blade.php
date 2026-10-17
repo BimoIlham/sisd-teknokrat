@@ -52,7 +52,7 @@
     >
         <!-- Top Branding Section -->
         <div class="sidebar-branding h-20 flex items-center justify-between border-b border-white/10 shrink-0">
-            <a href="{{ auth()->user()->hasRole('superadmin') ? route('lpm.dashboard') : route('supervisor.dashboard') }}" class="flex flex-1 items-center min-w-0" aria-label="Lembaga Penjaminan Mutu — halaman utama">
+            <a href="{{ auth()->user()->isLpmStaff() ? route('lpm.dashboard') : (auth()->user()->isOrganizationalStaff() ? route('unit.dashboard') : route('supervisor.dashboard')) }}" class="flex flex-1 items-center min-w-0" aria-label="Lembaga Penjaminan Mutu — halaman utama">
                 <img
                     x-show="!sidebarCollapsed"
                     src="{{ asset('images/logo-lpm-uti.png') }}"
@@ -96,7 +96,7 @@
         <!-- Middle Scrollable Navigation Menu -->
         <nav aria-label="Menu utama" class="flex-1 overflow-y-auto sidebar-scroll px-3.5 py-4 space-y-6">
             
-            @if(auth()->user()->hasRole('superadmin'))
+            @if(auth()->user()->isLpmStaff())
             <!-- GROUP 1: OVERVIEW -->
             <div>
                 <div x-show="!sidebarCollapsed" class="text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80 px-3 mb-2">
@@ -113,6 +113,31 @@
                     </a>
                 </div>
             </div>
+
+            @if(auth()->user()->hasRole('lpm_admin'))
+            <a href="{{ route('lpm.unit_accounts.index') }}" class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ request()->routeIs('lpm.unit_accounts.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                <svg class="mr-3 h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m18 0v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8zm8-7.87a4 4 0 010 7.75" /></svg>
+                <span x-show="!sidebarCollapsed">Akun Fakultas & Prodi</span>
+            </a>
+            @endif
+
+            @if(auth()->user()->isSuperadmin())
+            <div class="space-y-1">
+                <div x-show="!sidebarCollapsed" class="px-3 text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80">Superadmin</div>
+                <a href="{{ route('superadmin.deletions.index') }}" class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ request()->routeIs('superadmin.deletions.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                    <svg class="mr-3 h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" /></svg>
+                    <span x-show="!sidebarCollapsed">Penghapusan Permanen</span>
+                </a>
+                <a href="{{ route('superadmin.users.index') }}" class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ request()->routeIs('superadmin.users.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                    <svg class="mr-3 h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m18 0v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8zm8-7.87a4 4 0 010 7.75" /></svg>
+                    <span x-show="!sidebarCollapsed">Akun Admin LPM</span>
+                </a>
+                <a href="{{ route('superadmin.duplicates.index') }}" class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ request()->routeIs('superadmin.duplicates.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                    <svg class="mr-3 h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8a4 4 0 11-8 0 4 4 0 018 0zm-9 11a5 5 0 0110 0M4 12l-2 2 2 2m16-4l2 2-2 2" /></svg>
+                    <span x-show="!sidebarCollapsed">Audit Duplikat Dosen</span>
+                </a>
+            </div>
+            @endif
 
             <!-- GROUP 2: JADWAL PERKULIAHAN -->
             <div x-data="{ open: true }">
@@ -277,6 +302,14 @@
                 </div>
             </div>
 
+            @elseif(auth()->user()->isOrganizationalStaff())
+            <div class="space-y-1">
+                <div x-show="!sidebarCollapsed" class="px-3 text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80">{{ auth()->user()->hasRole('prodi') ? 'Program Studi' : 'Fakultas' }}</div>
+                <a href="{{ route('unit.dashboard') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.dashboard') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Dashboard</span></a>
+                <a href="{{ route('unit.lecturers.index') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.lecturers.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Direktori Dosen</span></a>
+                <a href="{{ route('unit.analytics.index') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.analytics.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Analisis Kohort T1/T2</span></a>
+                <a href="{{ route('unit.reports.supervision') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.reports.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Laporan Hasil Supervisi</span></a>
+            </div>
             @else
             <!-- SUPERVISOR MENU -->
             <div>
@@ -330,7 +363,7 @@
                     <div x-show="!sidebarCollapsed" class="flex flex-col min-w-0 transition-opacity">
                         <span class="text-xs font-bold text-white truncate">{{ auth()->user()->name }}</span>
                         <span class="text-[10px] text-rose-200/80 truncate">
-                            {{ auth()->user()->hasRole('superadmin') ? 'Superadmin' : 'Supervisor' }}
+                            {{ auth()->user()->isLpmStaff() ? 'Superadmin' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor')) }}
                         </span>
                     </div>
                 </div>
@@ -408,7 +441,7 @@
                             <p class="text-xs text-stone-500">Masuk sebagai:</p>
                             <p class="font-semibold text-stone-800 truncate">{{ auth()->user()->name }}</p>
                             <span class="inline-block mt-0.5 text-[10px] font-semibold text-[#7B1113] bg-rose-50 px-2 py-0.5 rounded">
-                                {{ auth()->user()->hasRole('superadmin') ? 'Administrator LPM' : 'Supervisor' }}
+                                {{ auth()->user()->isSuperadmin() ? 'Superadmin' : (auth()->user()->isLpmStaff() ? 'Administrator LPM' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor'))) }}
                             </span>
                         </div>
                         

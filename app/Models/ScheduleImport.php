@@ -10,6 +10,7 @@ class ScheduleImport extends Model
 {
     protected $fillable = [
         'academic_term_id',
+        'supervision_period_id',
         'uploaded_by',
         'uploaded_by_user_id',
         'original_filename',
@@ -47,6 +48,21 @@ class ScheduleImport extends Model
     public function academicTerm(): BelongsTo
     {
         return $this->belongsTo(AcademicTerm::class);
+    }
+
+    public function supervisionPeriod(): BelongsTo
+    {
+        return $this->belongsTo(SupervisionPeriod::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $import): void {
+            if (! $import->supervision_period_id) {
+                $import->supervision_period_id = SupervisionPeriod::where('academic_term_id', $import->academic_term_id)
+                    ->where('status', 'ACTIVE')->value('id');
+            }
+        });
     }
 
     public function uploader(): BelongsTo

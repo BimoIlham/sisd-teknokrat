@@ -482,7 +482,7 @@ class PeriodAssignmentPairService
         $occurrences = TeachingOccurrence::query()
             ->whereHas('teachingSchedule', function (Builder $query) use ($targetLecturerId, $stage): void {
                 $query->where('lecturer_id', $targetLecturerId)
-                    ->where('academic_term_id', $stage->supervisionPeriod->academic_term_id)
+                    ->where('supervision_period_id', $stage->supervisionPeriod->id)
                     ->where('is_active', true);
             })
             ->where('status', 'SCHEDULED')

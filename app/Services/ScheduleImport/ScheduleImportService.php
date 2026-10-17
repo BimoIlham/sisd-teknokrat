@@ -4,10 +4,14 @@ namespace App\Services\ScheduleImport;
 
 use App\Models\AcademicTerm;
 use App\Models\Lecturer;
+use App\Models\PeriodTarget;
 use App\Models\ScheduleImport;
 use App\Models\ScheduleImportRow;
+use App\Models\SupervisionPeriod;
+use App\Models\TeachingSchedule;
 use App\Models\User;
 use App\Services\PythonServiceConnection;
+use App\Services\Scheduling\SchedulingLockService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +23,7 @@ use Symfony\Component\Process\Process;
 
 class ScheduleImportService
 {
-    private const PARSER_VERSION = '1.2.0';
+    private const PARSER_VERSION = '1.3.0';
 
     public function __construct(protected ScheduleRowValidator $rowValidator) {}
 
@@ -43,11 +47,21 @@ class ScheduleImportService
         $sha256 = hash_file('sha256', $file->getRealPath());
 
         // Check if an uncommitted import for the same term and sha256 already exists
-        $existing = ScheduleImport::where('academic_term_id', $term->id)
+        $period = SupervisionPeriod::where('status', 'ACTIVE')->where('academic_term_id', $term->id)->first();
+        $existing = ScheduleImport::where('supervision_period_id', $period?->id)
+            ->where('academic_term_id', $term->id)
             ->where('sha256', $sha256)
             ->first();
 
-        if ($existing && ($existing->status === 'COMMITTED' || $existing->rows()->whereNotNull('committed_schedule_id')->exists())) {
+        $hasActiveSchedules = $existing && TeachingSchedule::where('source_import_id', $existing->id)->where('is_active', true)->exists();
+        if ($hasActiveSchedules) {
+            return $this->retryUnmatchedRows($existing);
+        }
+        if (in_array($existing?->status, ['COMMITTED', 'PENDING_REVIEW'], true) && $existing->rows()->exists()
+            && ! $existing->rows()->where(function ($query): void {
+                $query->whereNull('skip_reason')
+                    ->orWhereNotIn('skip_reason', [...PeriodLecturerExclusions::intentionalReasons(), PeriodLecturerExclusions::DEFERRED_REASON]);
+            })->exists()) {
             return $existing;
         }
 
@@ -57,9 +71,9 @@ class ScheduleImportService
         }
         $previousPath = $existing?->stored_path;
         try {
-            $import = DB::transaction(function () use ($existing, $term, $file, $uploader, $storedPath, $sha256): ScheduleImport {
+            $import = DB::transaction(function () use ($existing, $period, $term, $file, $uploader, $storedPath, $sha256): ScheduleImport {
                 DB::afterRollBack(fn () => $this->removeImportFile($storedPath));
-                if ($existing && $existing->status !== 'COMMITTED') {
+                if ($existing) {
                     $existing->rows()->delete();
                     $import = $existing;
                     $import->update([
@@ -74,6 +88,7 @@ class ScheduleImportService
                 } else {
                     $import = ScheduleImport::create([
                         'academic_term_id' => $term->id,
+                        'supervision_period_id' => $period?->id,
                         'uploaded_by' => $uploader->id,
                         'original_filename' => $file->getClientOriginalName(),
                         'storage_disk' => 'local',
@@ -102,6 +117,7 @@ class ScheduleImportService
         $knownDocument = app(ScheduleImportReferences::class)->parsedDocument($sha256);
         $parsedRows = $knownDocument['rows'] ?? [];
         $pageCount = $knownDocument['page_count'] ?? 1;
+        $parserOutdated = false;
 
         // 1. Try Python HTTP endpoint first
         if (empty($parsedRows)) {
@@ -123,9 +139,11 @@ class ScheduleImportService
 
                 if ($response->successful()) {
                     $data = $response->json();
-                    if (version_compare($data['parser']['version'] ?? '0.0.0', '1.1.0', '>=')) {
+                    if (version_compare($data['parser']['version'] ?? '0.0.0', self::PARSER_VERSION, '>=')) {
                         $parsedRows = $data['rows'] ?? [];
                         $pageCount = $data['page_count'] ?? 1;
+                    } else {
+                        $parserOutdated = true;
                     }
                 }
             } catch (ConnectionException $e) {
@@ -162,7 +180,8 @@ class ScheduleImportService
                         if ($jsonStart !== false) {
                             $jsonStr = substr($cliOutput, $jsonStart);
                             $data = json_decode($jsonStr, true);
-                            if (! empty($data['rows'])) {
+                            if (! empty($data['rows'])
+                                && version_compare($data['parser']['version'] ?? '0.0.0', self::PARSER_VERSION, '>=')) {
                                 $parsedRows = $data['rows'];
                                 $pageCount = $data['page_count'] ?? 1;
                             }
@@ -176,8 +195,16 @@ class ScheduleImportService
             }
         }
 
+        if (empty($parsedRows) && $parserOutdated) {
+            $message = 'Parser PDF di server belum versi '.self::PARSER_VERSION.'. Perbarui layanan Python bersama aplikasi sebelum mengunggah jadwal.';
+            $import->update(['status' => 'FAILED', 'error_message' => $message]);
+            throw ValidationException::withMessages(['schedule_pdf' => $message]);
+        }
+
         // Populate staging rows
         $rowCount = 0;
+        $excludedNames = [];
+        $resolvedLecturers = [];
 
         foreach ($parsedRows as $row) {
             $normalized = $row['normalized'] ?? $row;
@@ -207,6 +234,7 @@ class ScheduleImportService
 
             $payload = [
                 'lecturer_name' => $lecturerName,
+                'lecturer_external_code' => $normalized['lecturer_external_code'] ?? $row['lecturer_external_code'] ?? null,
                 'course_name' => $courseName,
                 'course_code' => $courseCode,
                 'class_name' => $className,
@@ -218,8 +246,20 @@ class ScheduleImportService
             ];
             $issues = $this->rowValidator->validate($payload, $row['issues'] ?? []);
             $hasErrors = collect($issues)->contains(fn (array $issue): bool => ($issue['severity'] ?? '') === 'ERROR');
-            $matchedLecturer = $this->resolveLecturer($lecturerName, ! $hasErrors && $confidence >= 0.85);
-            $status = $hasErrors ? 'INVALID' : ($matchedLecturer && $confidence >= 0.85 ? 'VALID' : 'AMBIGUOUS');
+            $nameKey = LecturerIdentityResolver::signature($lecturerName);
+            $excludedFromPeriod = $period && ($excludedNames[$nameKey] ??= app(PeriodLecturerExclusions::class)->contains($period->id, $lecturerName));
+            $canRestore = ! $hasErrors && $confidence >= 0.85;
+            $resolutionKey = $nameKey.'|'.($payload['lecturer_external_code'] ?? '').'|'.(int) $canRestore;
+            if (! $excludedFromPeriod && ! array_key_exists($resolutionKey, $resolvedLecturers)) {
+                $resolvedLecturers[$resolutionKey] = $this->resolveLecturer($lecturerName, $canRestore, $payload['lecturer_external_code']);
+            }
+            $matchedLecturer = $excludedFromPeriod ? null : $resolvedLecturers[$resolutionKey];
+            if ($period && $matchedLecturer && PeriodTarget::where('supervision_period_id', $period->id)
+                ->where('lecturer_id', $matchedLecturer->id)->where('scope_status', 'EXCLUDED')->exists()) {
+                $excludedFromPeriod = true;
+                $matchedLecturer = null;
+            }
+            $status = $excludedFromPeriod ? 'SKIPPED' : ($hasErrors ? 'INVALID' : ($matchedLecturer && $confidence >= 0.85 ? 'VALID' : 'AMBIGUOUS'));
 
             ScheduleImportRow::create([
                 'schedule_import_id' => $import->id,
@@ -233,6 +273,7 @@ class ScheduleImportService
                 'validation_status' => $status,
                 'matched_lecturer_id' => $matchedLecturer?->id,
                 'is_approved' => $status === 'VALID',
+                'skip_reason' => $excludedFromPeriod ? PeriodLecturerExclusions::SKIP_REASON : null,
             ]);
             $rowCount++;
         }
@@ -246,6 +287,68 @@ class ScheduleImportService
         ]);
 
         return $import;
+    }
+
+    public function retryUnmatchedRows(ScheduleImport $existing): ScheduleImport
+    {
+        return DB::transaction(function () use ($existing): ScheduleImport {
+            app(SchedulingLockService::class)->state();
+            $import = ScheduleImport::query()->lockForUpdate()->findOrFail($existing->id);
+            if (! in_array($import->status, ['COMMITTED', 'PENDING_REVIEW'], true)) {
+                return $import;
+            }
+
+            $restoredCount = 0;
+            $rows = ScheduleImportRow::query()
+                ->where('schedule_import_id', $import->id)
+                ->whereIn('validation_status', ['SKIPPED', 'AMBIGUOUS'])
+                ->whereNull('matched_lecturer_id')
+                ->whereNull('committed_schedule_id')
+                ->where(function ($query): void {
+                    $query->whereNull('skip_reason')
+                        ->orWhere('skip_reason', 'Nama dosen dari PDF tidak terbaca atau tidak cocok dengan direktori dosen.');
+                })
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($rows as $row) {
+                $payload = $row->normalized_payload ?? [];
+                if ($import->supervision_period_id && app(PeriodLecturerExclusions::class)
+                    ->contains($import->supervision_period_id, (string) ($payload['lecturer_name'] ?? ''))) {
+                    $row->update([
+                        'skip_reason' => PeriodLecturerExclusions::SKIP_REASON,
+                    ]);
+
+                    continue;
+                }
+                $issues = $this->rowValidator->validate($payload, $row->validation_issues ?? []);
+                if ((float) $row->parser_confidence < 0.85 || collect($issues)->contains(
+                    fn (array $issue): bool => ($issue['severity'] ?? '') === 'ERROR'
+                )) {
+                    continue;
+                }
+
+                $lecturer = $this->resolveLecturer((string) ($payload['lecturer_name'] ?? ''), true, $payload['lecturer_external_code'] ?? null);
+                if (! $lecturer || ($import->supervision_period_id && PeriodTarget::where('supervision_period_id', $import->supervision_period_id)
+                    ->where('lecturer_id', $lecturer->id)->where('scope_status', 'EXCLUDED')->exists())) {
+                    continue;
+                }
+
+                $row->update([
+                    'matched_lecturer_id' => $lecturer->id,
+                    'validation_status' => 'VALID',
+                    'is_approved' => true,
+                    'skip_reason' => null,
+                ]);
+                $restoredCount++;
+            }
+
+            if ($restoredCount > 0) {
+                $import->update(['status' => 'PENDING_REVIEW']);
+            }
+
+            return $import;
+        }, 3);
     }
 
     private function removeImportFile(string $path): void
@@ -262,39 +365,14 @@ class ScheduleImportService
     /**
      * Resolve a parsed PDF name only when it uniquely identifies an active roster entry.
      */
-    protected function resolveLecturer(string $lecturerName, bool $restoreReference = false): ?Lecturer
+    protected function resolveLecturer(string $lecturerName, bool $restoreReference = false, ?string $nidn = null): ?Lecturer
     {
         $lecturerName = trim($lecturerName);
         if (! $this->isPlausibleLecturerName($lecturerName)) {
             return null;
         }
 
-        $activeLecturers = Lecturer::where('is_active', true)->get(['id', 'name']);
-        $normalizedName = $this->normalizeLecturerName($lecturerName);
-        $exactMatches = $activeLecturers->filter(
-            fn (Lecturer $lecturer): bool => $this->normalizeLecturerName($lecturer->name) === $normalizedName
-        );
-
-        if ($exactMatches->count() === 1) {
-            return $exactMatches->first();
-        }
-
-        if ($exactMatches->isNotEmpty()) {
-            return null;
-        }
-
-        $normalizedBaseName = $this->normalizeLecturerBaseName($lecturerName);
-        $baseNameMatches = $activeLecturers->filter(
-            fn (Lecturer $lecturer): bool => $this->normalizeLecturerBaseName($lecturer->name) === $normalizedBaseName
-        );
-
-        if ($baseNameMatches->count() === 1) {
-            return $baseNameMatches->first();
-        }
-
-        return $baseNameMatches->isEmpty() && $restoreReference
-            ? app(ScheduleImportReferences::class)->restoreLecturer($lecturerName)
-            : null;
+        return app(LecturerIdentityResolver::class)->resolve($lecturerName, $nidn, $restoreReference);
     }
 
     private function isPlausibleLecturerName(string $lecturerName): bool
@@ -304,18 +382,6 @@ class ScheduleImportService
             return false;
         }
 
-        return ! preg_match('/^(?:dosen pengampu|(?:senin|selasa|rabu|kamis|jumat|jum\x{2019}at|sabtu|minggu)|jadwal dihasilkan|lab(?:oratorium)?\s)/iu', $name);
-    }
-
-    private function normalizeLecturerBaseName(string $lecturerName): string
-    {
-        return ScheduleImportReferences::normalizeBaseName($lecturerName);
-    }
-
-    private function normalizeLecturerName(string $lecturerName): string
-    {
-        $normalized = preg_replace('/[^\pL\pN]+/u', ' ', $lecturerName);
-
-        return mb_strtolower(trim(preg_replace('/\s+/', ' ', $normalized ?? $lecturerName)));
+        return ! preg_match('/^(?:team|tim(?:\s|$)|dosen pengampu|(?:senin|selasa|rabu|kamis|jumat|jum\x{2019}at|sabtu|minggu)|jadwal dihasilkan|lab(?:oratorium)?\s)/iu', $name);
     }
 }

@@ -2,6 +2,22 @@ import fitz
 import pytest
 from app.parsers.schedule_parser import SchedulePdfParser
 
+
+@pytest.mark.parametrize('label,expected_name,expected_nidn', [
+    ('Turwan Aldi Putra, S.Kom. (Instruktur)', 'Turwan Aldi Putra, S.Kom. (Instruktur)', None),
+    ('Turwan Aldi Putra, S.Kom. [0123456789]', 'Turwan Aldi Putra, S.Kom.', '0123456789'),
+    ('Turwan Aldi Putra, S.Kom. (12345)', 'Turwan Aldi Putra, S.Kom. (12345)', None),
+])
+def test_only_ten_digit_nidn_is_extracted_from_lecturer_name(label, expected_name, expected_nidn):
+    row = SchedulePdfParser()._extract_table_row(
+        [label, 'Senin', '08:00-09:40', 'Pemrograman', 'IF 27 A', 'ONLINE'],
+        {'lecturer': 0, 'day': 1, 'time': 2, 'course': 3, 'class': 4, 'room': 5},
+        1, 1, 'GANJIL', '2027/2028'
+    )
+    assert row.normalized.lecturer_name == expected_name
+    assert row.normalized.lecturer_external_code == expected_nidn
+    assert SchedulePdfParser().version == '1.3.0'
+
 def test_invalid_pdf_bytes():
     parser = SchedulePdfParser()
     res = parser.parse(b"not a valid pdf", import_id=1)

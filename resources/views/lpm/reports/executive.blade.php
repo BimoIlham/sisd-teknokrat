@@ -36,7 +36,7 @@
             <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-[#7B1113]">
-                        Lembaga Penjaminan Mutu (LPM)
+                        {{ $publisherLabel }}
                     </span>
                     <span class="text-xs font-semibold tracking-wide text-slate-500">
                         UNIVERSITAS TEKNOKRAT INDONESIA
@@ -52,7 +52,7 @@
             </div>
 
             <div class="flex min-w-0 flex-col gap-2 print:hidden lg:flex-row lg:items-end">
-                <form method="GET" action="{{ route('lpm.reports.supervision') }}" class="filter-controls w-full flex-1" style="--filter-columns: minmax(0,1.6fr) minmax(0,1fr)">
+                <form method="GET" action="{{ route($reportRoute) }}" class="filter-controls w-full flex-1" style="--filter-columns: minmax(0,1.6fr) minmax(0,1fr)">
                     <label class="filter-field">
                         <span class="sr-only">Semester Supervisi</span>
                         <select name="period_id" @disabled($periods->isEmpty()) onchange="this.form.submit()" class="filter-control">

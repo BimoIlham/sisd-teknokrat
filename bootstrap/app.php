@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckMustChangePassword;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureRootSuperadmin;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'must_change_password' => CheckMustChangePassword::class,
+            'root_superadmin' => EnsureRootSuperadmin::class,
         ]);
 
         $middleware->appendToGroup('web', [

@@ -35,11 +35,28 @@ class ScheduleCommitService
                 return 0; // Idempotent
             }
 
+            if ($import->supervision_period_id && ! SupervisionPeriod::whereKey($import->supervision_period_id)
+                ->where('academic_term_id', $import->academic_term_id)->where('status', 'ACTIVE')->exists()) {
+                throw ValidationException::withMessages(['import' => 'Periode unggahan ini tidak aktif lagi. Unggah jadwal untuk periode aktif.']);
+            }
+
             $pendingRows = ScheduleImportRow::where('schedule_import_id', $import->id)
                 ->where('validation_status', '<>', 'SKIPPED')
                 ->with(['matchedLecturer', 'committedSchedule'])
                 ->orderBy('id')->lockForUpdate()->get();
             if ($pendingRows->isEmpty()) {
+                $intentionalRows = ScheduleImportRow::where('schedule_import_id', $import->id)
+                    ->where('validation_status', 'SKIPPED')
+                    ->whereIn('skip_reason', PeriodLecturerExclusions::intentionalReasons())
+                    ->count();
+                if ($intentionalRows > 0 && $intentionalRows === $import->rows()->count()) {
+                    $import->update(['status' => 'COMMITTED', 'committed_at' => now()]);
+                    app(ScheduleImportReferences::class)->rememberImport($import);
+                    $locks->bump($state);
+
+                    return 0;
+                }
+
                 throw ValidationException::withMessages(['import' => ['Tidak ada jadwal valid untuk diaktifkan.']]);
             }
 
@@ -117,37 +134,6 @@ class ScheduleCommitService
 
             $committedCount = 0;
 
-            foreach ($rows->groupBy('matched_lecturer_id') as $lecturerRows) {
-                $lecturer = $lecturerRows->first()->matchedLecturer;
-                $identitySources = $lecturer->identity_sources ?? [];
-                $pdfNames = $lecturerRows->map(fn (ScheduleImportRow $row): array => [
-                    'source' => 'schedule_pdf',
-                    'value' => trim(preg_replace('/,\s*,+/', ',',
-                        $row->normalized_payload['lecturer_name'] ?? $row->parsed_lecturer_name
-                            ?? $row->raw_payload['lecturer'] ?? $row->raw_payload['lecturer_name'] ?? ''
-                    )),
-                    'raw_value' => $row->raw_payload['lecturer'] ?? $row->raw_payload['lecturer_name'] ?? $row->parsed_lecturer_name,
-                    'import_id' => $import->id,
-                    'page' => $row->source_page,
-                ]);
-                if (in_array($identitySources['name']['source'] ?? null, ['schedule_pdf', 'manual'], true)) {
-                    $pdfNames->push($identitySources['name']);
-                }
-                $pdfSource = $pdfNames->filter(fn (array $source): bool => ! empty($source['value']))
-                    ->sortByDesc(fn (array $source): int => mb_strlen($source['value']))->first();
-                if ($pdfSource && ($identitySources['name']['source'] ?? null) !== 'manual') {
-                    $identitySources['name'] = $pdfSource;
-                    $lecturer->update([
-                        'name' => $pdfSource['value'],
-                        'normalized_name' => mb_strtolower($pdfSource['value']),
-                        'identity_sources' => $identitySources,
-                    ]);
-                    foreach ($lecturerRows as $row) {
-                        $row->unsetRelation('matchedLecturer');
-                    }
-                }
-            }
-
             foreach ($rows as $row) {
                 $existingSchedule = $row->committedSchedule;
                 if ($existingSchedule?->is_active) {
@@ -173,6 +159,7 @@ class ScheduleCommitService
 
                 $attributes = [
                     'academic_term_id' => $term->id,
+                    'supervision_period_id' => $import->supervision_period_id,
                     'faculty_id' => $facId,
                     'study_program_id' => $prodiId,
                     'lecturer_id' => $row->matched_lecturer_id,
@@ -210,7 +197,7 @@ class ScheduleCommitService
 
             // Auto-enroll lecturers into PeriodTarget for any active SupervisionPeriods of this term
             $lecturerIds = $rows->pluck('matched_lecturer_id')->filter()->unique();
-            $periods = SupervisionPeriod::where('academic_term_id', $term->id)->where('status', 'ACTIVE')->get();
+            $periods = SupervisionPeriod::whereKey($import->supervision_period_id)->get();
             $adminId = auth()->id() ?? 1;
 
             foreach ($periods as $period) {

@@ -77,6 +77,17 @@ class LecturerDeletionTest extends TestCase
         $this->assertGreaterThan($revision, (int) DB::table('scheduling_state')->where('id', 1)->value('revision'));
     }
 
+    public function test_lpm_admin_keeps_the_existing_delete_action_and_its_protection(): void
+    {
+        $this->admin->removeRole('superadmin');
+        $this->admin->assignRole('lpm_admin');
+        $this->actingAs($this->admin)->delete(route('lpm.lecturers.destroy', $this->lecturer), $this->deletePayload())
+            ->assertRedirect(route('lpm.lecturers.index', ['period_id' => $this->period->id]))
+            ->assertSessionHas('success');
+        $this->assertDatabaseMissing('lecturers', ['id' => $this->lecturer->id]);
+        $this->assertDatabaseHas('supervision_periods', ['id' => $this->period->id]);
+    }
+
     #[TestWith(['account'])]
     #[TestWith(['membership'])]
     #[TestWith(['assignment'])]

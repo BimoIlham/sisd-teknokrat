@@ -2,8 +2,11 @@
 
 namespace App\Policies;
 
+use App\Models\Lecturer;
+use App\Models\PeriodTarget;
 use App\Models\Supervision;
 use App\Models\User;
+use App\Services\OrganizationalScope;
 use App\Services\Supervision\SupervisionAccessService;
 
 class SupervisionPolicy
@@ -12,7 +15,25 @@ class SupervisionPolicy
 
     public function downloadPdf(User $user, Supervision $supervision): bool
     {
-        return $user->isSuperadmin();
+        if ($user->isLpmStaff()) {
+            return true;
+        }
+
+        if (! $user->isOrganizationalStaff() || $supervision->status !== 'SUBMITTED') {
+            return false;
+        }
+
+        $assignment = $supervision->assignment;
+        $periodId = $assignment?->supervisionStage?->supervision_period_id;
+        if (! $assignment || ! $periodId || $assignment->status === 'CANCELLED') {
+            return false;
+        }
+
+        $scope = new OrganizationalScope($user);
+
+        return $scope->lecturers(Lecturer::whereKey($assignment->target_lecturer_id))->exists()
+            && PeriodTarget::where('supervision_period_id', $periodId)
+                ->where('lecturer_id', $assignment->target_lecturer_id)->included()->exists();
     }
 
     /**
@@ -20,7 +41,7 @@ class SupervisionPolicy
      */
     public function view(User $user, Supervision $supervision): bool
     {
-        if ($user->isSuperadmin()) {
+        if ($user->isLpmStaff()) {
             return true;
         }
 

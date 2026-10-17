@@ -88,7 +88,7 @@ class PythonServiceSecurityTest extends TestCase
     {
         Http::fake([
             '*/v1/solve-assignments' => Http::response(['status' => 'FEASIBLE', 'assignments' => [], 'coverage_rate' => 0]),
-            '*/v1/parse-schedule' => Http::response(['parser' => ['version' => '1.1.0'], 'rows' => [[
+            '*/v1/parse-schedule' => Http::response(['parser' => ['version' => '1.3.0'], 'rows' => [[
                 'confidence' => 0.98, 'normalized' => ['lecturer_name' => 'Dosen Pengujian', 'course_name' => 'Pemrograman', 'class_name' => 'IF A', 'day_of_week' => 1, 'start_time' => '08:00', 'end_time' => '09:40', 'room_name' => 'R1', 'delivery_mode' => 'OFFLINE'],
             ]], 'page_count' => 1]),
         ]);

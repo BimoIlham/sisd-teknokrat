@@ -10,7 +10,7 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Superadmin LPM
+        // Administrator LPM
         $admin = User::firstOrCreate(
             ['email' => 'lpm@teknokrat.ac.id'],
             [
@@ -20,6 +20,8 @@ class UserSeeder extends Seeder
                 'must_change_password' => false,
             ]
         );
-        $admin->assignRole('superadmin');
+        if (! $admin->hasRole('superadmin')) {
+            $admin->assignRole('lpm_admin');
+        }
     }
 }

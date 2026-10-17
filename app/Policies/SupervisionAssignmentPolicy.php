@@ -15,7 +15,7 @@ class SupervisionAssignmentPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->isSuperadmin() || $user->isSupervisor();
+        return $user->isLpmStaff() || $user->isSupervisor();
     }
 
     /**
@@ -24,7 +24,7 @@ class SupervisionAssignmentPolicy
      */
     public function view(User $user, SupervisionAssignment $assignment): bool
     {
-        if ($user->isSuperadmin()) {
+        if ($user->isLpmStaff()) {
             return true;
         }
 
@@ -42,7 +42,7 @@ class SupervisionAssignmentPolicy
      */
     public function update(User $user, SupervisionAssignment $assignment): bool
     {
-        return $user->isSuperadmin();
+        return $user->isLpmStaff();
     }
 
     /**
@@ -58,6 +58,6 @@ class SupervisionAssignmentPolicy
      */
     public function delete(User $user, SupervisionAssignment $assignment): bool
     {
-        return $user->isSuperadmin();
+        return $user->isLpmStaff();
     }
 }

@@ -22,7 +22,7 @@ class SupervisionEvidencePolicy
      */
     public function download(User $user, SupervisionEvidence $evidence): bool
     {
-        if ($user->isSuperadmin()) {
+        if ($user->isLpmStaff()) {
             return true;
         }
 

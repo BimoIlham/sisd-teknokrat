@@ -1,22 +1,24 @@
 @extends('layouts.app', ['title' => 'Direktori Dosen'])
 
 @section('content')
-<div class="space-y-6" x-data='lecturerProfileEditor(@json($faculties->map(fn ($faculty) => ["id" => $faculty->id, "name" => $faculty->name, "code" => $faculty->code])->values()), @json($selectedPeriod?->id))'>
+<div class="space-y-6" @unless($isUnit) x-data='lecturerProfileEditor(@json($faculties->map(fn ($faculty) => ["id" => $faculty->id, "name" => $faculty->name, "code" => $faculty->code])->values()), @json($selectedPeriod?->id))' @endunless>
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Direktori Dosen</h1>
             <p class="text-xs text-slate-500 mt-1">Daftar dosen pada {{ $selectedPeriod?->semester_display ?? 'periode terpilih' }}, beserta fakultas asal dan program studi pada profil dosen.</p>
         </div>
+        @unless($isUnit)
         <button type="button" @click="openCreate()" @disabled($faculties->isEmpty() || !$selectedPeriod) class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#7B1113] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#5A0E13] disabled:cursor-not-allowed disabled:opacity-50">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Tambah Dosen
         </button>
+        @endunless
     </div>
 
     <!-- Search & Filter Bar -->
     <div class="filter-bar space-y-2">
-        <form method="GET" action="{{ route('lpm.lecturers.index') }}" class="filter-controls" style="--filter-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto">
+        <form method="GET" action="{{ route($isUnit ? 'unit.lecturers.index' : 'lpm.lecturers.index') }}" class="filter-controls" style="--filter-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto">
             <!-- Search Text -->
             <div class="filter-search">
                 <svg class="filter-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -25,6 +27,16 @@
 
             <!-- Filter Fakultas -->
             <div class="filter-field">
+                @if($isUnit && $scope->studyProgramId() === null)
+                <select name="study_program_id" aria-label="Program Studi" onchange="this.form.submit()" class="filter-control">
+                    <option value="">Semua Program Studi</option>
+                    @foreach($unitPrograms as $program)
+                        <option value="{{ $program->id }}" @selected($selectedProgram == $program->id)>{{ $program->name }}</option>
+                    @endforeach
+                </select>
+                @elseif($isUnit)
+                <span class="filter-control flex items-center">{{ $scope->label() }}</span>
+                @else
                 <select name="faculty" aria-label="Fakultas" onchange="this.form.submit()" class="filter-control">
                     <option value="">Semua Fakultas</option>
                     @foreach($faculties as $fac)
@@ -33,6 +45,7 @@
                         </option>
                     @endforeach
                 </select>
+                @endif
             </div>
 
             <!-- Filter semester supervisi -->
@@ -53,8 +66,8 @@
             <!-- Submit Button & Reset -->
             <div class="filter-actions">
                 <button type="submit" title="Terapkan Filter" class="filter-button">Filter</button>
-                @if(request('search') || request('faculty') || (request('completion') && request('completion') !== 'all'))
-                    <a href="{{ route('lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" title="Reset Filter" aria-label="Reset Filter" class="filter-reset">
+                @if(request('search') || request('faculty') || request('study_program_id') || (request('completion') && request('completion') !== 'all'))
+                    <a href="{{ route($isUnit ? 'unit.lecturers.index' : 'lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" title="Reset Filter" aria-label="Reset Filter" class="filter-reset">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </a>
                 @endif
@@ -74,6 +87,9 @@
                             Fakultas: {{ $selFac->code }}
                         </span>
                     @endif
+                @endif
+                @if($isUnit && $selectedProgram)
+                    <span class="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 font-bold text-blue-800">Prodi: {{ $unitPrograms->firstWhere('id', $selectedProgram)?->name }}</span>
                 @endif
                 @if($completionFilter !== 'all')
                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg {{ $completionFilter === 'complete' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold' : 'bg-amber-50 text-amber-800 border border-amber-200 font-bold' }}">
@@ -148,12 +164,15 @@
                             </td>
                             <td class="px-2 py-3.5 text-center">
                                 <div class="flex items-center justify-center gap-1">
+                                    @unless($isUnit)
                                     <button type="button" data-lecturer-id="{{ $lecturer->id }}" data-lecturer-name="{{ $lecturer->name }}" data-lecturer-nidn="{{ $lecturer->nidn }}" data-faculty-id="{{ $lecturer->faculty_id }}" data-study-program-id="{{ $lecturer->study_program_id }}" @click="openEditorFromButton($event.currentTarget)" aria-label="Edit dosen {{ $lecturer->name }}" title="Edit dosen {{ $lecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500">
                                         <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                     </button>
-                                    <a href="{{ route('lpm.lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) }}" aria-label="Lihat detail dosen {{ $lecturer->name }}" title="Lihat detail dosen {{ $lecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]">
+                                    @endunless
+                                    <a href="{{ route($isUnit ? 'unit.lecturers.show' : 'lpm.lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) }}" aria-label="Lihat detail dosen {{ $lecturer->name }}" title="Lihat detail dosen {{ $lecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]">
                                         <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.5" stroke-width="2" /></svg>
                                     </a>
+                                    @unless($isUnit)
                                     <form method="POST" action="{{ route('lpm.lecturers.destroy', $lecturer) }}" data-lecturer-name="{{ $lecturer->name }}" @submit.prevent="confirmLecturerDeletion($event.currentTarget)">
                                         @csrf
                                         @method('DELETE')
@@ -163,6 +182,7 @@
                                             <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         </button>
                                     </form>
+                                    @endunless
                                 </div>
                             </td>
                         </tr>
@@ -180,6 +200,7 @@
         </div>
     </div>
 
+    @unless($isUnit)
     <div x-cloak x-show="editing" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-6 backdrop-blur-sm" @click.self="closeEditor()" @keydown.escape.window="closeEditor()">
         <section x-show="editing" x-transition class="my-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="lecturer-editor-title">
             <div class="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -382,5 +403,6 @@
         };
     }
 </script>
+@endunless
 
 @endsection

@@ -29,8 +29,8 @@ class PersonalScheduleController extends Controller
         $supervisionAssignments = collect();
 
         if ($lecturer && $period) {
-            $teachingOccurrences = TeachingOccurrence::whereHas('teachingSchedule', function ($q) use ($lecturer) {
-                $q->where('lecturer_id', $lecturer->id);
+            $teachingOccurrences = TeachingOccurrence::whereHas('teachingSchedule', function ($q) use ($lecturer, $period) {
+                $q->where('lecturer_id', $lecturer->id)->where('supervision_period_id', $period->id);
             })
                 ->whereBetween('occurs_on', [$period->start_date, $period->end_date])
                 ->with(['teachingSchedule.course', 'teachingSchedule.studyProgram'])
@@ -59,7 +59,7 @@ class PersonalScheduleController extends Controller
 
         $teachingSchedules = $teachingOccurrences->map(fn ($occ) => $occ->teachingSchedule)->filter()->unique('id')->values();
         if ($teachingSchedules->isEmpty() && $lecturer) {
-            $teachingSchedules = $lecturer->teachingSchedules()->where('is_active', true)->with('course')->get();
+            $teachingSchedules = $lecturer->teachingSchedules()->where('is_active', true)->where('supervision_period_id', $period?->id)->with('course')->get();
         }
 
         $supervisionSchedules = collect();
@@ -199,7 +199,7 @@ class PersonalScheduleController extends Controller
 
     public function downloadPdf(): Response
     {
-        abort_unless(auth()->user()->isSuperadmin(), 403, 'Cetak PDF hanya tersedia untuk LPM.');
+        abort_unless(auth()->user()->isLpmStaff(), 403, 'Cetak PDF hanya tersedia untuk LPM.');
 
         $lecturer = auth()->user()->lecturer;
         if (! $lecturer) {

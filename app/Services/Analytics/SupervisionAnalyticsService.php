@@ -6,6 +6,7 @@ use App\Models\PeriodTarget;
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
+use Illuminate\Database\Eloquent\Builder;
 
 class SupervisionAnalyticsService
 {
@@ -13,10 +14,12 @@ class SupervisionAnalyticsService
      * Calculate global progress according to Invariant 38:
      * Progress = submitted / (target INCLUDED * mandatory stages)
      */
-    public function calculateProgress(SupervisionPeriod $period): array
+    public function calculateProgress(SupervisionPeriod $period, ?int $facultyId = null, ?int $studyProgramId = null): array
     {
         $includedTargetsCount = PeriodTarget::where('supervision_period_id', $period->id)
             ->where('scope_status', 'INCLUDED')
+            ->when($facultyId || $studyProgramId, fn (Builder $query): Builder => $query->whereHas('lecturer',
+                fn (Builder $lecturers): Builder => $this->filterLecturers($lecturers, $facultyId, $studyProgramId)))
             ->count();
 
         $stagesCount = SupervisionStage::where('supervision_period_id', $period->id)->count();
@@ -27,6 +30,8 @@ class SupervisionAnalyticsService
             ->whereHas('assignment.supervisionStage', function ($q) use ($period) {
                 $q->where('supervision_period_id', $period->id);
             })
+            ->when($facultyId || $studyProgramId, fn (Builder $query): Builder => $query->whereHas('assignment.targetLecturer',
+                fn (Builder $lecturers): Builder => $this->filterLecturers($lecturers, $facultyId, $studyProgramId)))
             ->where('status', 'SUBMITTED')
             ->count();
 
@@ -65,10 +70,7 @@ class SupervisionAnalyticsService
                 $query->where('supervision_stage_id', $stage->id)
                     ->where('status', '<>', 'CANCELLED');
             })
-                ->whereHas('assignment.targetLecturer', function ($query) use ($facultyId, $studyProgramId): void {
-                    $query->when($facultyId, fn ($lecturers) => $lecturers->where('faculty_id', $facultyId))
-                        ->when($studyProgramId, fn ($lecturers) => $lecturers->where('study_program_id', $studyProgramId));
-                })
+                ->whereHas('assignment.targetLecturer', fn (Builder $query): Builder => $this->filterLecturers($query, $facultyId, $studyProgramId))
                 ->where('status', 'SUBMITTED')
                 ->with([
                     'assignment.targetLecturer.studyProgram.faculty',
@@ -174,5 +176,21 @@ class SupervisionAnalyticsService
             'mean_t1' => $meanT1,
             'mean_t2' => $meanT2,
         ];
+    }
+
+    private function filterLecturers(Builder $query, ?int $facultyId, ?int $studyProgramId): Builder
+    {
+        if ($studyProgramId) {
+            return $query->where('study_program_id', $studyProgramId);
+        }
+
+        if ($facultyId) {
+            return $query->where(function (Builder $lecturers) use ($facultyId): void {
+                $lecturers->whereHas('studyProgram', fn (Builder $programs): Builder => $programs->where('faculty_id', $facultyId))
+                    ->orWhere(fn (Builder $withoutProgram): Builder => $withoutProgram->whereNull('study_program_id')->where('faculty_id', $facultyId));
+            });
+        }
+
+        return $query;
     }
 }

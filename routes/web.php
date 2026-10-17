@@ -7,14 +7,21 @@ use App\Http\Controllers\Lpm\DashboardController as LpmDashboardController;
 use App\Http\Controllers\Lpm\ExecutiveReportController;
 use App\Http\Controllers\Lpm\InstrumentController;
 use App\Http\Controllers\Lpm\LecturerDirectoryController;
+use App\Http\Controllers\Lpm\LecturerNameReviewController;
 use App\Http\Controllers\Lpm\ScheduleImportController;
+use App\Http\Controllers\Lpm\SuperadminDeletionController;
+use App\Http\Controllers\Lpm\SuperadminDuplicateController;
+use App\Http\Controllers\Lpm\SuperadminUserController;
 use App\Http\Controllers\Lpm\SupervisedLecturerController;
 use App\Http\Controllers\Lpm\SupervisionPeriodController;
 use App\Http\Controllers\Lpm\SupervisorDirectoryController;
+use App\Http\Controllers\Lpm\UnitAccountController;
 use App\Http\Controllers\Supervisor\AssignmentLetterController;
 use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardController;
 use App\Http\Controllers\Supervisor\PersonalScheduleController;
 use App\Http\Controllers\Supervisor\SupervisionExecutionController;
+use App\Http\Controllers\Unit\UnitAnalyticsController;
+use App\Http\Controllers\Unit\UnitDashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -36,8 +43,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/password/change', [AuthController::class, 'updatePassword'])->name('password.update');
 });
 
-// LPM Superadmin Routes
-Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->group(function () {
+// LPM Routes
+Route::middleware(['auth', 'role:superadmin|lpm_admin'])->prefix('lpm')->name('lpm.')->group(function () {
     Route::get('/dashboard', [LpmDashboardController::class, 'index'])->name('dashboard');
 
     // Supervision Periods & Stages (Periode Supervisi)
@@ -53,6 +60,9 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
     // Schedule PDF Import
     Route::get('/import', [ScheduleImportController::class, 'index'])->name('import.index');
     Route::post('/import', [ScheduleImportController::class, 'store'])->middleware('throttle:schedule-imports')->name('import.store');
+    Route::get('/import/names', [LecturerNameReviewController::class, 'index'])->name('import.names.index');
+    Route::get('/import/{import}/names', [LecturerNameReviewController::class, 'show'])->name('import.names.show');
+    Route::post('/import/{import}/names/{row}', [LecturerNameReviewController::class, 'resolve'])->name('import.names.resolve');
     Route::get('/import/{import}', [ScheduleImportController::class, 'show'])->name('import.show');
 
     // Assignment Workspace & Solver
@@ -120,6 +130,40 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('lpm')->name('lpm.')->gro
         ->middleware('throttle:5,1')->block(30, 10)->name('supervisors.rotate_legacy_credential');
     Route::get('/supervisors/{supervisor}/stages/{stage}/surat-tugas', [SupervisorDirectoryController::class, 'downloadAssignmentLetter'])->middleware('throttle:report-exports')->name('supervisors.assignment_letter');
     Route::delete('/supervisors/{supervisor}', [SupervisorDirectoryController::class, 'destroy'])->name('supervisors.destroy');
+});
+
+Route::middleware(['auth', 'role:lpm_admin'])->prefix('lpm/unit-accounts')->name('lpm.unit_accounts.')->group(function () {
+    Route::get('/', [UnitAccountController::class, 'index'])->name('index');
+    Route::post('/', [UnitAccountController::class, 'store'])->name('store');
+    Route::get('/{user}', [UnitAccountController::class, 'show'])->name('show');
+    Route::put('/{user}', [UnitAccountController::class, 'update'])->name('update');
+    Route::delete('/{user}', [UnitAccountController::class, 'destroy'])->name('destroy');
+    Route::post('/{user}/reset-password', [UnitAccountController::class, 'resetPassword'])->name('reset_password');
+});
+
+Route::middleware(['auth', 'role:fakultas|prodi'])->prefix('unit')->name('unit.')->group(function () {
+    Route::get('/dashboard', [UnitDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');
+    Route::get('/lecturers/{lecturer}', [LecturerDirectoryController::class, 'show'])->name('lecturers.show');
+    Route::get('/supervisions/{supervision}/pdf', [LecturerDirectoryController::class, 'downloadSupervisionPdf'])
+        ->middleware('throttle:report-exports')->name('supervisions.pdf');
+    Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
+    Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+});
+
+Route::middleware(['auth', 'role:superadmin', 'root_superadmin'])->prefix('superadmin')->name('superadmin.')->group(function () {
+    Route::get('/duplicates', [SuperadminDuplicateController::class, 'index'])->name('duplicates.index');
+    Route::get('/duplicates/{keep}/{remove}', [SuperadminDuplicateController::class, 'preview'])->name('duplicates.preview');
+    Route::post('/duplicates/{keep}/{remove}', [SuperadminDuplicateController::class, 'merge'])->name('duplicates.merge');
+    Route::get('/deletions', [SuperadminDeletionController::class, 'index'])->name('deletions.index');
+    Route::get('/deletions/{type}/bulk', [SuperadminDeletionController::class, 'previewBulk'])->whereIn('type', ['lecturer', 'supervisor'])->name('deletions.bulk.preview');
+    Route::delete('/deletions/{type}/bulk', [SuperadminDeletionController::class, 'destroyBulk'])->whereIn('type', ['lecturer', 'supervisor'])->name('deletions.bulk.destroy');
+    Route::get('/deletions/{type}/{id}', [SuperadminDeletionController::class, 'preview'])->whereNumber('id')->name('deletions.preview');
+    Route::delete('/deletions/{type}/{id}', [SuperadminDeletionController::class, 'destroy'])->whereNumber('id')->name('deletions.destroy');
+    Route::get('/users', [SuperadminUserController::class, 'index'])->name('users.index');
+    Route::post('/users', [SuperadminUserController::class, 'store'])->name('users.store');
+    Route::put('/users/{user}', [SuperadminUserController::class, 'update'])->name('users.update');
+    Route::post('/users/{user}/reset-password', [SuperadminUserController::class, 'resetPassword'])->name('users.reset_password');
 });
 
 // Supervisor Routes

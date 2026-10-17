@@ -124,7 +124,7 @@ class ResetScheduleDataTest extends TestCase
             $this->assertDatabaseCount($table, $count);
         }
         $this->assertDatabaseCount('users', 1);
-        $this->assertTrue($admin->fresh()->isSuperadmin());
+        $this->assertTrue($admin->fresh()->hasRole('lpm_admin'));
         $this->assertNull($admin->fresh()->lecturer_id);
         $this->assertSame($adminPassword, $admin->fresh()->password);
         $this->assertDatabaseMissing('model_has_roles', ['model_type' => User::class, 'model_id' => $supervisor->id]);

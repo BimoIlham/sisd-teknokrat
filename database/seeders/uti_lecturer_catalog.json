@@ -1,0 +1,1319 @@
+{
+  "version": 1,
+  "source_hashes": {
+    "excel": "0179c02c66117b08dd881b8e0c83b41a2f5802240ed1a8af55bc41072d2258c0",
+    "affiliation_roster": "be1cd01c00103bbbad87e74c1841d1c5ca4e844effddcf4da025ad64bee969e6"
+  },
+  "lecturers": [
+    {
+      "name": "Alvi Raihan Utami, M.Pd.",
+      "external_code": null,
+      "faculty_code": "FSIP",
+      "study_program_code": "PI",
+      "aliases": [
+        "Alvi Raihan Utami, M.Pd.",
+        "Alvi Raihan Utami, S.Pd., M.Pd.",
+        "Alvi Raihan Utami, M.Pd"
+      ]
+    },
+    {
+      "name": "Arifai, M.Pd.",
+      "external_code": "0228059103",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Arifai, M.Pd.",
+        "Arifai, S.Pd., M.Pd."
+      ]
+    },
+    {
+      "name": "Dina Amelia, S.S., M.Hum.",
+      "external_code": "0214098401",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Dina Amelia, S.S., M.Hum.",
+        "Dina Amelia, SS., M.Hum.",
+        "Dina Amelia, M.Hum."
+      ]
+    },
+    {
+      "name": "Dr. Aditya Gumantan, M.Pd.",
+      "external_code": "0220049001",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Dr. Aditya Gumantan, M.Pd.",
+        "Dr. Aditya Gumantan"
+      ]
+    },
+    {
+      "name": "Dr. Eko Bagus Fahrizqi, M.Pd.",
+      "external_code": "0217089101",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Dr. Eko Bagus Fahrizqi, M.Pd.",
+        "Eko Bagus Fahrizqi, M.Pd."
+      ]
+    },
+    {
+      "name": "Dr. Jafar Fakhrurozi, S.Pd., M.Hum.",
+      "external_code": "0226098301",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Dr. Jafar Fakhrurozi, S.Pd., M.Hum.",
+        "Dr. Jaffar Fakhrurozi"
+      ]
+    },
+    {
+      "name": "Dr. Rizki Yuliandra, M.Pd.",
+      "external_code": "0225079002",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Dr. Rizki Yuliandra, M.Pd.",
+        "Dr. Rizky Yuliandra, M.Pd.",
+        "Rizki Yuliandra, M.Pd."
+      ]
+    },
+    {
+      "name": "Dr. Sugama Maskar, M.PMat.",
+      "external_code": "0214099002",
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Dr. Sugama Maskar, M.PMat.",
+        "Sugama Maskar, S.Pd., M.PMat."
+      ]
+    },
+    {
+      "name": "Dyah Aminatun, S.Pd., M.Pd.",
+      "external_code": "0231079102",
+      "faculty_code": "FSIP",
+      "study_program_code": "PI",
+      "aliases": [
+        "Dyah Aminatun, S.Pd., M.Pd.",
+        "Dyah Aminatun, M.Pd."
+      ]
+    },
+    {
+      "name": "Ingatan Gulo, S.S., M.Hum.",
+      "external_code": "0207018203",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Ingatan Gulo, S.S., M.Hum.",
+        "Ingatan Gulo, SS., M.Hum.",
+        "Ingatan Gulo, M.Hum."
+      ]
+    },
+    {
+      "name": "Intan Hamzah, S.Pd., M.Pd.",
+      "external_code": "0222109101",
+      "faculty_code": "FSIP",
+      "study_program_code": "PI",
+      "aliases": [
+        "Intan Hamzah, S.Pd., M.Pd.",
+        "Intan Hamzah, M.Pd."
+      ]
+    },
+    {
+      "name": "Khairani Putri Salsya, M.Pd.",
+      "external_code": "0219069801",
+      "faculty_code": "FSIP",
+      "study_program_code": "PI",
+      "aliases": [
+        "Khairani Putri Salsya, M.Pd.",
+        "Khairani Putri Salsya, S.Pd., M.Pd.",
+        "Khairani Salsya, S.Pd., M.Pd"
+      ]
+    },
+    {
+      "name": "M. Asgaff Aznan Siregar, SH., M.H.",
+      "external_code": "0202069701",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "M. Asgaff Aznan Siregar, SH., M.H.",
+        "M. Asgaff Aznan Siregar, S.H., M.H."
+      ]
+    },
+    {
+      "name": "Masnia Rahayu, S.S., M.Hum.",
+      "external_code": "0226109601",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Masnia Rahayu, S.S., M.Hum.",
+        "Masnia Rahayu, SS., M.Hum.",
+        "Masnia Rahayu,SS., M.Hum."
+      ]
+    },
+    {
+      "name": "Monica Septiani, S.I.Kom., MBA.",
+      "external_code": "0201099402",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Monica Septiani, S.I.Kom., MBA.",
+        "Monica Septiani, S.Ikom., MBA.",
+        "Monica Septiani, S.I.kom., MBA."
+      ]
+    },
+    {
+      "name": "Mutiara Ayu, S.Pd., M.Pd.",
+      "external_code": "0221039101",
+      "faculty_code": "FSIP",
+      "study_program_code": "PI",
+      "aliases": [
+        "Mutiara Ayu, S.Pd., M.Pd.",
+        "Mutiara Ayu, M.Pd."
+      ]
+    },
+    {
+      "name": "Nicky Dwi Puspaningtyas, M.Pd.",
+      "external_code": "0217039101",
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Nicky Dwi Puspaningtyas, M.Pd.",
+        "Nicky Dwi P, S.Pd., M.Pd."
+      ]
+    },
+    {
+      "name": "Putri Sukma Dewi, S.Pd., M.Pd.",
+      "external_code": "0211078901",
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Putri Sukma Dewi, S.Pd., M.Pd.",
+        "Putri Sukma Dewi, M.Pd."
+      ]
+    },
+    {
+      "name": "Rachmi Marsheilla Aguss, M.Pd.",
+      "external_code": "0219099002",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Rachmi Marsheilla Aguss, M.Pd.",
+        "Rachmi Marsheilla, M.Pd.",
+        "Rachmi Marsheilla Agus, S.Pd., M.Pd"
+      ]
+    },
+    {
+      "name": "Raras Kartika Sari, S.Pd., M.Pd.",
+      "external_code": "0223049104",
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Raras Kartika Sari, S.Pd., M.Pd.",
+        "Raras Kartika Sari, M.Pd."
+      ]
+    },
+    {
+      "name": "Refiesta Ratu Anderha, M.Pd.",
+      "external_code": null,
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Refiesta Ratu Anderha, M.Pd."
+      ]
+    },
+    {
+      "name": "Reza Adhi Nugroho, M.Pd.",
+      "external_code": "0210019302",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Reza Adhi Nugroho, M.Pd."
+      ]
+    },
+    {
+      "name": "Suprayogi, M.Hum.",
+      "external_code": "0217028902",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Suprayogi, M.Hum.",
+        "Suprayogi, SS., M.Hum."
+      ]
+    },
+    {
+      "name": "Triyanto, M.Pd.",
+      "external_code": "0207079501",
+      "faculty_code": "FSIP",
+      "study_program_code": "PO",
+      "aliases": [
+        "Triyanto, M.Pd.",
+        "Triyanto, S.Pd., M.Pd."
+      ]
+    },
+    {
+      "name": "Try Ruliyanti, S.H., M.H.",
+      "external_code": "0219069601",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Try Ruliyanti, S.H., M.H.",
+        "Try Ruliyanti, SH., MH."
+      ]
+    },
+    {
+      "name": "Very Hendra Saputra, S.Pd.Si., M.Pd.",
+      "external_code": "0227118901",
+      "faculty_code": "FSIP",
+      "study_program_code": "PM",
+      "aliases": [
+        "Very Hendra Saputra, S.Pd.Si., M.Pd.",
+        "Very Hendra Saputra, S.Pd., M.Pd.",
+        "Very Hendra Saputra, S.Pd.Si.,M.Pd."
+      ]
+    },
+    {
+      "name": "Prof. H. Akhyar Rido, Ph.D.",
+      "external_code": "0203078201",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Prof. H. Akhyar Rido, Ph.D.",
+        "Prof. Akhyar Rido, SS., MA., Ph.D.",
+        "Prof. Akhyar Rido, S.S., M.A., Ph.D."
+      ]
+    },
+    {
+      "name": "Dr. Ngestirosa EWK, M.A.",
+      "external_code": "0208077001",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Dr. Ngestirosa EWK, M.A.",
+        "Dr. E. Ngestirosa, S.Pd., S.S., M.A.",
+        "Dr. E. Ngestirosa, S.S., S.Pd., M.A."
+      ]
+    },
+    {
+      "name": "Dr. Heri Kuswoyo, M.Hum.",
+      "external_code": "0202038501",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Dr. Heri Kuswoyo, M.Hum.",
+        "Dr. Heri Kuswoyo, S.S., M.Hum."
+      ]
+    },
+    {
+      "name": "Dr. Afrianto, M.Hum.",
+      "external_code": "0220048102",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Dr. Afrianto, M.Hum.",
+        "Dr. Afrianto, S.S., M.Hum.",
+        "Dr. Afrianto, M.Pd."
+      ]
+    },
+    {
+      "name": "Dr. Laila Ulsi Qodriani, S.S., M.A.",
+      "external_code": "0224018801",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Dr. Laila Ulsi Qodriani, S.S., M.A."
+      ]
+    },
+    {
+      "name": "Dr. M. Yuseano Kardiansyah, M.A.",
+      "external_code": "0212108901",
+      "faculty_code": "FSIP",
+      "study_program_code": "MBI",
+      "aliases": [
+        "Dr. M. Yuseano Kardiansyah, M.A.",
+        "Dr. M. Yuseano Kardiyansyah, S.S., M.A.",
+        "Dr. M.Yuseano Kardiansyah, S.S., M.A."
+      ]
+    },
+    {
+      "name": "Ade Candra, S.M., M.M.",
+      "external_code": "0215079601",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Ade Candra, S.M., M.M.",
+        "Ade Candra, SM., MM."
+      ]
+    },
+    {
+      "name": "Berlintina Permatasari, S.P., M.M.",
+      "external_code": "0215028706",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Berlintina Permatasari, S.P., M.M."
+      ]
+    },
+    {
+      "name": "Cinthya Bella, S.M., M.S.M.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Cinthya Bella, S.M., M.S.M.",
+        "Cinthya Bella, SM., MSM.",
+        "Cinthya Bella, S.M., M.S.M"
+      ]
+    },
+    {
+      "name": "Dr. Dian Novita, S.E., M.M.",
+      "external_code": "0220117901",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Dr. Dian Novita, S.E., M.M.",
+        "Dian Novita, SE., MM."
+      ]
+    },
+    {
+      "name": "Dr. Lia Febria Lina, S.E., M.Sc.",
+      "external_code": "0225029501",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Dr. Lia Febria Lina, S.E., M.Sc.",
+        "Dr. Lia Febria Lina, SE., M.Sc."
+      ]
+    },
+    {
+      "name": "Dr. Tri Darma Rosmala Sari, S.E., M.S.Ak.",
+      "external_code": "0206067802",
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Dr. Tri Darma Rosmala Sari, S.E., M.S.Ak.",
+        "Dr. Tri Darma Rosmala Sari, SE., MS.Ak."
+      ]
+    },
+    {
+      "name": "Dwi Gema Soegesti, S.M., M.S.M.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Dwi Gema Soegesti, S.M., M.S.M.",
+        "Dwi Gema Soegesti, SM., MSM."
+      ]
+    },
+    {
+      "name": "Dwi Tirta Kencana, S.E., M.S.Ak.",
+      "external_code": "0218119001",
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Dwi Tirta Kencana, S.E., M.S.Ak.",
+        "Dwi Tirta Kencana, SE., MS.Ak., Akt."
+      ]
+    },
+    {
+      "name": "Febrian Eko Saputra, S.M., M.S.M.",
+      "external_code": "0227029901",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Febrian Eko Saputra, S.M., M.S.M.",
+        "Febrian Eko Saputra, SM., MSM.",
+        "Febrian Eko Saputro, S.M., M.S.M."
+      ]
+    },
+    {
+      "name": "Fitri, S.M., M.Sc.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Fitri, S.M., M.Sc.",
+        "Fitri, SM., M.Sc."
+      ]
+    },
+    {
+      "name": "Ghesna Larasati Sunatriyo, S.E., M.Ak.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Ghesna Larasati Sunatriyo, S.E., M.Ak.",
+        "Ghesna Larasati S, SE., M.Ak."
+      ]
+    },
+    {
+      "name": "Kemala Puji, S.E.I., M.E.",
+      "external_code": "0207129301",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Kemala Puji, S.E.I., M.E."
+      ]
+    },
+    {
+      "name": "Marsi Fella Rizki, M.Ak.",
+      "external_code": "0229049301",
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Marsi Fella Rizki, M.Ak.",
+        "Marsi Fella Riski, S.E., M.Ak. CRA",
+        "Marsi Fella Rizki, S.E., M.Ak., CRA."
+      ]
+    },
+    {
+      "name": "Nabila Putri Maharani, S.M., M.M.",
+      "external_code": "0222069901",
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Nabila Putri Maharani, S.M., M.M.",
+        "Nabila Puri Maharani, SM., MM."
+      ]
+    },
+    {
+      "name": "Shiwi Angelica Cindiyasari Sihono, S.Akun., MBA.",
+      "external_code": "0212039601",
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Shiwi Angelica Cindiyasari Sihono, S.Akun., MBA.",
+        "Shiwi Angelica Cindiyasari Sihono, MBA."
+      ]
+    },
+    {
+      "name": "Widyantari Dwipa, S.M., M.S.M.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "MN",
+      "aliases": [
+        "Widyantari Dwipa, S.M., M.S.M.",
+        "Widyantari Dwipa, SM., MSM."
+      ]
+    },
+    {
+      "name": "Wulan Rezky Amalya, S.Ak., M.Ak.",
+      "external_code": "0228039901",
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Wulan Rezky Amalya, S.Ak., M.Ak.",
+        "Wulan Rezky Amalya, S.Ak., M.Ak"
+      ]
+    },
+    {
+      "name": "Yanti Puspita Sari, S.Ak., M.Sc.",
+      "external_code": null,
+      "faculty_code": "FEB",
+      "study_program_code": "AK",
+      "aliases": [
+        "Yanti Puspita Sari, S.Ak., M.Sc."
+      ]
+    },
+    {
+      "name": "Muhammad Fithratullah, S.S., M.Hum.",
+      "external_code": "0225098602",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Muhammad Fithratullah, S.S., M.Hum.",
+        "Muhammad Fithratullah, SS., MA.",
+        "Muhammad Fithratullah, M.A.",
+        "M. Fithratullah, M.A."
+      ]
+    },
+    {
+      "name": "Ade Dwi Putra, S.Kom., M.Kom.",
+      "external_code": "0204068701",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Ade Dwi Putra, S.Kom., M.Kom.",
+        "Ade Dwi Putra, S.Kom., M.Kom"
+      ]
+    },
+    {
+      "name": "Parjito, S.Kom., M.Cs.",
+      "external_code": "0204067705",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Parjito, S.Kom., M.Cs.",
+        "Parjito, M.Kom"
+      ]
+    },
+    {
+      "name": "A. Ferico Octaviansyah P, M.Kom.",
+      "external_code": "0210108501",
+      "faculty_code": "FTIK",
+      "study_program_code": "TI",
+      "aliases": [
+        "A. Ferico Octaviansyah P, M.Kom.",
+        "A Ferico Octaviansyah Pasaribu, S.Kom., M.Kom.",
+        "A. Ferico Octaviansyah, M.Kom"
+      ]
+    },
+    {
+      "name": "Adhie Thyo Priandika, S.Kom., M.Kom.",
+      "external_code": "0209108702",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Adhie Thyo Priandika, S.Kom., M.Kom.",
+        "Adhie Thyo Priandika, S.Kom., M.Kom"
+      ]
+    },
+    {
+      "name": "Aditia Yudhistira, S.Kom., M.Kom.",
+      "external_code": "0228049802",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Aditia Yudhistira, S.Kom., M.Kom.",
+        "Aditia Yudhistira, M.Kom."
+      ]
+    },
+    {
+      "name": "Ajeng Savitri Puspaningrum, S.Kom., M.Kom.",
+      "external_code": "0214058904",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Ajeng Savitri Puspaningrum, S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Angga Bayu Santoso, S.Kom., M.Kom.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Angga Bayu Santoso, S.Kom., M.Kom.",
+        "Angga Bayu, S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Ari Sulistiyawati, S.Si., S.Kom., M.Pd.",
+      "external_code": "8807830017",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Ari Sulistiyawati, S.Si., S.Kom., M.Pd.",
+        "Ari Sulistiyawati, S.Si., S.Kom., M. Pd.",
+        "Ari Sulistyawati, S.Si., M.Pd."
+      ]
+    },
+    {
+      "name": "Auliya Rahman Isnain, S.Kom., M.Cs.",
+      "external_code": "0207029201",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Auliya Rahman Isnain, S.Kom., M.Cs.",
+        "Auliya Rahman Isnain, M.Cs."
+      ]
+    },
+    {
+      "name": "Can (Dr.) Setiawansyah, M.Kom.",
+      "external_code": "0213098401",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Can (Dr.) Setiawansyah, M.Kom.",
+        "Setiawansyah, S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Debby Alita, S.Kom., M.Cs.",
+      "external_code": "0218049001",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Debby Alita, S.Kom., M.Cs.",
+        "Debby Alita, S.Kom., M.Cs"
+      ]
+    },
+    {
+      "name": "Destiana Safitri, M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Destiana Safitri, M.T.",
+        "Destiana Safitri, ST., MT.",
+        "Destiana Safitri, ST.., MT."
+      ]
+    },
+    {
+      "name": "Dr. Amarudin, S.Kom., M.Eng.",
+      "external_code": "0206048301",
+      "faculty_code": "FTIK",
+      "study_program_code": "MIK",
+      "aliases": [
+        "Dr. Amarudin, S.Kom., M.Eng."
+      ]
+    },
+    {
+      "name": "Dr. Damayanti, S.Kom., M.Kom.",
+      "external_code": "0204087704",
+      "faculty_code": "FTIK",
+      "study_program_code": "MIK",
+      "aliases": [
+        "Dr. Damayanti, S.Kom., M.Kom.",
+        "Dr. Damayanti, M.Kom."
+      ]
+    },
+    {
+      "name": "Dr. Erliyan Redy Susanto, S.Kom., M.Kom.",
+      "external_code": "0211078201",
+      "faculty_code": "FTIK",
+      "study_program_code": "MIK",
+      "aliases": [
+        "Dr. Erliyan Redy Susanto, S.Kom., M.Kom.",
+        "Dr. Erliyan Redi, S.Kom., M.Kom.",
+        "Dr. Erliyan Redi S., M.Kom"
+      ]
+    },
+    {
+      "name": "Dr. Heni Sulistiani, S.Kom., M.Kom.",
+      "external_code": "0212108601",
+      "faculty_code": "FTIK",
+      "study_program_code": "MIK",
+      "aliases": [
+        "Dr. Heni Sulistiani, S.Kom., M.Kom.",
+        "Dr. Heni Sulistiani, M.Kom"
+      ]
+    },
+    {
+      "name": "Dr. Ir. Lilik Ariyanto, ST., MT., IPM ASEAN Eng.",
+      "external_code": "0222117902",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Dr. Ir. Lilik Ariyanto, ST., MT., IPM ASEAN Eng.",
+        "Dr. Ir. Lilik Ariyanto, ST., MT., IPM., ASEAN Eng.",
+        "Dr. Ir. Lilik Ariyanto, S.T., M.T."
+      ]
+    },
+    {
+      "name": "Dr. Rohmat Indra Borman, S.Kom., M.Kom.",
+      "external_code": "0207108702",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Dr. Rohmat Indra Borman, S.Kom., M.Kom.",
+        "Dr. Rohmat Indra Borman, M.Kom.",
+        "Dr. Rohmat Indra Borman, S.Kom., M.Kom"
+      ]
+    },
+    {
+      "name": "Dr. Rusliyawati, S.Kom., M.T.I.",
+      "external_code": "0215047901",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Dr. Rusliyawati, S.Kom., M.T.I."
+      ]
+    },
+    {
+      "name": "Dr. Ryan Randy Suryono, S.Kom., M.Kom.",
+      "external_code": "0205058902",
+      "faculty_code": "FTIK",
+      "study_program_code": "MIK",
+      "aliases": [
+        "Dr. Ryan Randy Suryono, S.Kom., M.Kom.",
+        "Dr. Ryan Randy Suryono, M.Kom"
+      ]
+    },
+    {
+      "name": "Dr. Sampurna Dadi Riskiono, S.Kom. M.Eng.",
+      "external_code": "0220098401",
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Dr. Sampurna Dadi Riskiono, S.Kom. M.Eng.",
+        "Dr. Sampurna Dadi R, S.Kom., M.Eng."
+      ]
+    },
+    {
+      "name": "Dr. Syaiful Ahdan, S.Kom., M.T.",
+      "external_code": "0217048203",
+      "faculty_code": "FTIK",
+      "study_program_code": "TI",
+      "aliases": [
+        "Dr. Syaiful Ahdan, S.Kom., M.T.",
+        "Syaiful Ahdan, S.Kom., MT."
+      ]
+    },
+    {
+      "name": "Dr. Zaenal Abidin, S.Si., S.Kom., M.T.",
+      "external_code": "0210078102",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Dr. Zaenal Abidin, S.Si., S.Kom., M.T.",
+        "Zaenal Abidin, S.Si., S.Kom., MT.",
+        "Zaenal Abidin, MT"
+      ]
+    },
+    {
+      "name": "Dr.Sc. Dedi Darwis, S.Kom., M.Kom., CDSP.",
+      "external_code": "0201018802",
+      "faculty_code": "FTIK",
+      "study_program_code": "TI",
+      "aliases": [
+        "Dr.Sc. Dedi Darwis, S.Kom., M.Kom., CDSP.",
+        "Dr. Si. Dedi Darwis, S.Kom., M.Kom.",
+        "Dr. Si. Dedi Darwis, M.Kom."
+      ]
+    },
+    {
+      "name": "Dyah Ayu Megawaty, S.Kom., M.Kom.",
+      "external_code": "0207108601",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Dyah Ayu Megawaty, S.Kom., M.Kom.",
+        "Dyah Ayu Megawaty, M.Kom"
+      ]
+    },
+    {
+      "name": "Elka Pranita, S.Pd., M.T.",
+      "external_code": "0218029501",
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Elka Pranita, S.Pd., M.T.",
+        "Elka Pranita, S.Pd. M.T"
+      ]
+    },
+    {
+      "name": "Fadila Shely Amalia, S.Kom., M.Cs.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TI",
+      "aliases": [
+        "Fadila Shely Amalia, S.Kom., M.Cs.",
+        "Fadila Shelly, S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Faruk Ulum, S.T., M.T.I.",
+      "external_code": "0218058202",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Faruk Ulum, S.T., M.T.I.",
+        "Faruk Ulum, ST., M.T.I.",
+        "Faruk Ulum, ST., MTI."
+      ]
+    },
+    {
+      "name": "Fenty Ariany, S.T., M.Kom.",
+      "external_code": "0212127401",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Fenty Ariany, S.T., M.Kom.",
+        "Fenty Ariani, ST., M.Kom"
+      ]
+    },
+    {
+      "name": "Fika Trisnawati, S.T., M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Fika Trisnawati, S.T., M.T.",
+        "Fika Trisnawati, ST., MT."
+      ]
+    },
+    {
+      "name": "Hj. Tien Yulianti, S.Pd., M.Pd.",
+      "external_code": "0210077001",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Hj. Tien Yulianti, S.Pd., M.Pd.",
+        "Tien Yulianti, S.Pd., M.Pd."
+      ]
+    },
+    {
+      "name": "Imam Ahmad, S.Kom., M.Kom.",
+      "external_code": "0202088702",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Imam Ahmad, S.Kom., M.Kom.",
+        "Imam Ahmad, M.Kom"
+      ]
+    },
+    {
+      "name": "Ir. Sari Anton, S.T., M.T., IPM.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Ir. Sari Anton, S.T., M.T., IPM.",
+        "Ir. Sari Anton, ST., MT."
+      ]
+    },
+    {
+      "name": "Ir. Susarman, S.T., M.T.",
+      "external_code": "0216127302",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Ir. Susarman, S.T., M.T.",
+        "Susarman, ST. MT.",
+        "Susarman, S.T., M.T"
+      ]
+    },
+    {
+      "name": "Jaka Persada Sembiring, S.Kom., M.Cs.",
+      "external_code": "0226018901",
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Jaka Persada Sembiring, S.Kom., M.Cs.",
+        "Jaka Persada Sembiring, M.Cs"
+      ]
+    },
+    {
+      "name": "M. Anwar Sadat Faidar, S.T., M.T.",
+      "external_code": "0216039801",
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "M. Anwar Sadat Faidar, S.T., M.T.",
+        "Muhammad Anwar Sadat Faidar, ST., MT."
+      ]
+    },
+    {
+      "name": "M. Ghufroni An'ars, M.Pd.",
+      "external_code": "0228109601",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "M. Ghufroni An'ars, M.Pd.",
+        "M. Ghufroni An Ars, S.Pd., M.Pd",
+        "M. Ghufroni An Ars, S.Pd., M.Pd."
+      ]
+    },
+    {
+      "name": "Muhammad Najib Dwi Satria, S.Kom., M.T.",
+      "external_code": "0201039001",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Muhammad Najib Dwi Satria, S.Kom., M.T.",
+        "M. Najib Dwi Satria, S.Kom., MT.",
+        "Muhammad Najib Dwi Satria, S.Kom., M.T"
+      ]
+    },
+    {
+      "name": "Nirwana Hendrastuty, S.Kom., M.Cs",
+      "external_code": "0222069501",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Nirwana Hendrastuty, S.Kom., M.Cs",
+        "Nirwana Hendrastuty, S.Kom.M.Cs.",
+        "Nirwana Hendrastuty, M.Cs"
+      ]
+    },
+    {
+      "name": "Rahma Sopilawati, S.Ars., M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Rahma Sopilawati, S.Ars., M.T.",
+        "Rahma Sopilawati, ST., MT."
+      ]
+    },
+    {
+      "name": "Rakhmat Dedi Gunawan, S.Kom., M.Kom.",
+      "external_code": "0203128601",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Rakhmat Dedi Gunawan, S.Kom., M.Kom.",
+        "Rahmat Dedi Gunawan, S.Kom., M.Kom.",
+        "Rahmat Dedi Gunawan, M.Kom"
+      ]
+    },
+    {
+      "name": "Reflan Nuari, S.Kom., M.Kom.",
+      "external_code": "0231039303",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Reflan Nuari, S.Kom., M.Kom.",
+        "Reflan Nauri, M.Kom"
+      ]
+    },
+    {
+      "name": "Ridwan Mahenra, S.Kom., M.C.S(AI)",
+      "external_code": "0207109801",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Ridwan Mahenra, S.Kom., M.C.S(AI)",
+        "Ridwan Mahenra, S.Kom., M.Cs. AI.",
+        "Ridwan Mahenra, M.Cs."
+      ]
+    },
+    {
+      "name": "S. Samsugi., S.Kom., M.Eng",
+      "external_code": "0215088101",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "S. Samsugi., S.Kom., M.Eng",
+        "Selamet Samsugi, S.Kom., M.Eng.",
+        "S. Samsugi, S.Kum., M.Kom."
+      ]
+    },
+    {
+      "name": "Sigit Doni Ramdan, S.T., M.Eng.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Sigit Doni Ramdan, S.T., M.Eng."
+      ]
+    },
+    {
+      "name": "Styawati, S.T., M.Cs.",
+      "external_code": "0212028302",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Styawati, S.T., M.Cs.",
+        "Styawati, S.Kom., M.Cs."
+      ]
+    },
+    {
+      "name": "Suaidah, S.Kom., M.Kom.",
+      "external_code": "0206089002",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Suaidah, S.Kom., M.Kom.",
+        "Suaidah, M.Kom"
+      ]
+    },
+    {
+      "name": "Temi Ardiansyah, S.Kom., M.Kom.",
+      "external_code": "0208098701",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Temi Ardiansyah, S.Kom., M.Kom.",
+        "Temi Ardiansyah, M.Kom"
+      ]
+    },
+    {
+      "name": "Tri Widodo, S.T., M.Kom.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Tri Widodo, S.T., M.Kom.",
+        "Tri Widodo, ST., M.Kom.",
+        "Tri Widodo, S.T., M.Kom"
+      ]
+    },
+    {
+      "name": "Yuri Rahmanto, S.Kom., M.Kom.",
+      "external_code": "0208098901",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Yuri Rahmanto, S.Kom., M.Kom.",
+        "Yuri Rahmanto S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Yusra Fernando, S.Kom., M.Kom.",
+      "external_code": "0212118602",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Yusra Fernando, S.Kom., M.Kom.",
+        "Yusra Fernando, M.Kom"
+      ]
+    },
+    {
+      "name": "Latifah, ST., M.Kom.",
+      "external_code": "0224019002",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Latifah, ST., M.Kom.",
+        "Lathifah, M.Kom"
+      ]
+    },
+    {
+      "name": "M. Pajar Kharisma, M.Cs",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "M. Pajar Kharisma, M.Cs"
+      ]
+    },
+    {
+      "name": "Neneng, S.Kom., M.Kom.",
+      "external_code": "0206088002",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Neneng, S.Kom., M.Kom.",
+        "Neneng, M.Kom"
+      ]
+    },
+    {
+      "name": "Permata, S.Si., M.Si.",
+      "external_code": "0229038201",
+      "faculty_code": "FTIK",
+      "study_program_code": "IF",
+      "aliases": [
+        "Permata, S.Si., M.Si.",
+        "Permata, M.Si"
+      ]
+    },
+    {
+      "name": "Agung Deni Wahyudi, S.Kom., M.Kom.",
+      "external_code": "0219098402",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Agung Deni Wahyudi, S.Kom., M.Kom.",
+        "Agung Deni Wahyudi, M.Kom."
+      ]
+    },
+    {
+      "name": "Qadhli Jafar Adrian, Bmm., MIT.",
+      "external_code": "0224128703",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Qadhli Jafar Adrian, Bmm., MIT."
+      ]
+    },
+    {
+      "name": "Riduwan Napianto, S.Kom., M.T.",
+      "external_code": "0229117102",
+      "faculty_code": "FTIK",
+      "study_program_code": "SI",
+      "aliases": [
+        "Riduwan Napianto, S.Kom., M.T.",
+        "Riduwan Napianto, S.T., M.Kom."
+      ]
+    },
+    {
+      "name": "Dr. Charles Ronald Harahap, M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TE",
+      "aliases": [
+        "Dr. Charles Ronald Harahap, M.T.",
+        "Dr. Charles Ronal Harahap"
+      ]
+    },
+    {
+      "name": "Agung Tri Prastowo, S.Kom., M.Kom.",
+      "external_code": "0206039101",
+      "faculty_code": "FTIK",
+      "study_program_code": "TK",
+      "aliases": [
+        "Agung Tri Prastowo, S.Kom., M.Kom."
+      ]
+    },
+    {
+      "name": "Arniza Fitri, P.hD",
+      "external_code": "0203078403",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Arniza Fitri, P.hD",
+        "Dr. Arniza Fitri, ST., M.Sc., Beng."
+      ]
+    },
+    {
+      "name": "Fajar Dewantoro, M.Ars.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Fajar Dewantoro, M.Ars."
+      ]
+    },
+    {
+      "name": "Felly Misdalena, S.T., M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Felly Misdalena, S.T., M.T."
+      ]
+    },
+    {
+      "name": "Ir. Kastamto, ST., MT.",
+      "external_code": "0213117302",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Ir. Kastamto, ST., MT.",
+        "Kastamto, ST., MT.",
+        "Kastamto, M.T"
+      ]
+    },
+    {
+      "name": "Sefrinta Sasma Murdiagatma, ST., MT.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Sefrinta Sasma Murdiagatma, ST., MT.",
+        "Sefrinta Sasma, ST., MT."
+      ]
+    },
+    {
+      "name": "Vanita Kusumawati Yacub, ST., MT.",
+      "external_code": "0202119101",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Vanita Kusumawati Yacub, ST., MT.",
+        "Vanita Kesumawati Yacub, ST., M.Eng",
+        "Vanita Kesuma Yakub, M.T."
+      ]
+    },
+    {
+      "name": "Virani Mayniani, S.T., M.T.",
+      "external_code": null,
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Virani Mayniani, S.T., M.T."
+      ]
+    },
+    {
+      "name": "Ikbal Yasin, S.E.",
+      "external_code": "0218117901",
+      "faculty_code": "FTIK",
+      "study_program_code": "TI",
+      "aliases": [
+        "Ikbal Yasin, S.E.",
+        "Ikbal yasin, S.E., M.M"
+      ]
+    },
+    {
+      "name": "Ely Nurmaily, S.S., M.Hum.",
+      "external_code": "0206058001",
+      "faculty_code": "FSIP",
+      "study_program_code": "SS",
+      "aliases": [
+        "Ely Nurmaily, S.S., M.Hum.",
+        "Ely Nurmaily, M.Hum."
+      ]
+    },
+    {
+      "name": "Ir. Hadyan Arifin Bustam, ST., MT.",
+      "external_code": "0025049207",
+      "faculty_code": "FTIK",
+      "study_program_code": "TS",
+      "aliases": [
+        "Ir. Hadyan Arifin Bustam, ST., MT."
+      ]
+    },
+    {
+      "name": "Alvi Suhartanto, S.Kom.",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Alvi Suhartanto, S.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Budi Santosa, S.Kom.(Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Budi Santosa, S.Kom.(Instruktur)"],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Deva Dian Ardana, S.Kom., (Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Deva Dian Ardana, S.Kom., (Instruktur)"],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Fikih Yuda Sena, S.Kom.(Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Fikih Yuda Sena, S.Kom.(Instruktur)", "Fikih Yuhada Sena, S.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Helma Nopijani Heidy, S.Kom., M.Kom.",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Helma Nopijani Heidy, S.Kom., M.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Mahendra Dewantoro, S.Kom., M.Kom.",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Mahendra Dewantoro, S.Kom., M.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Muhammad Surono, M.Kom.",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Muhammad Surono, M.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Rido Febriansyah, S.Kom. (Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Rido Febriansyah, S.Kom. (Instruktur)", "Rido Febryansyah, S.Kom."],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Samingan, S.Kom. (Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Samingan, S.Kom. (Instruktur)"],
+      "source": "user_confirmed_local_deletion_audit"
+    },
+    {
+      "name": "Turwan Aldi Putra, S.Kom. (Instruktur)",
+      "external_code": null,
+      "faculty_code": null,
+      "study_program_code": null,
+      "aliases": ["Turwan Aldi Putra, S.Kom. (Instruktur)"],
+      "source": "user_confirmed_local_deletion_audit"
+    }
+  ]
+}

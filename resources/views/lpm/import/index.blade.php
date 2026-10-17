@@ -14,6 +14,7 @@
         <p class="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
             Unggah PDF jadwal resmi. Sistem langsung membaca dan mengaktifkan jadwal yang datanya jelas; baris yang tidak terbaca dengan aman tidak akan diaktifkan.
         </p>
+        <a href="{{ route('lpm.import.names.index') }}" class="inline-block rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-[#7B1113]">Tinjau Nama Dosen</a>
     </div>
 
     <!-- Upload Card -->

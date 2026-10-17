@@ -34,10 +34,18 @@ class RoleAndPermissionSeeder extends Seeder
         $superadmin = Role::firstOrCreate(['name' => 'superadmin', 'guard_name' => 'web']);
         $superadmin->syncPermissions(Permission::all());
 
+        $lpmAdmin = Role::firstOrCreate(['name' => 'lpm_admin', 'guard_name' => 'web']);
+        $lpmAdmin->syncPermissions(Permission::all());
+
         $supervisor = Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web']);
         $supervisor->syncPermissions([
             'fill-supervisions',
             'view-personal-schedule',
         ]);
+
+        Role::firstOrCreate(['name' => 'fakultas', 'guard_name' => 'web'])
+            ->syncPermissions(['view-analytics']);
+        Role::firstOrCreate(['name' => 'prodi', 'guard_name' => 'web'])
+            ->syncPermissions(['view-analytics']);
     }
 }

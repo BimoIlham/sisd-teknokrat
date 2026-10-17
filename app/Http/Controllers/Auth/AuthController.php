@@ -26,8 +26,11 @@ class AuthController extends Controller
         if (Auth::check()) {
             $user = $request->user();
             abort_unless($user->is_active, 403);
-            if ($user->hasRole('superadmin')) {
+            if ($user->isLpmStaff()) {
                 return redirect()->route('lpm.dashboard');
+            }
+            if ($user->isOrganizationalStaff()) {
+                return redirect()->route('unit.dashboard');
             }
             if ($user->hasRole('supervisor')) {
                 return redirect()->route('supervisor.dashboard');
@@ -215,9 +218,12 @@ class AuthController extends Controller
      */
     protected function redirectBasedOnRole(User $user): RedirectResponse
     {
-        if ($user->hasRole('superadmin')) {
+        if ($user->isLpmStaff()) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/lpm';
             $fallbackRoute = 'lpm.dashboard';
+        } elseif ($user->isOrganizationalStaff()) {
+            $rolePrefix = rtrim(request()->getBasePath(), '/').'/unit';
+            $fallbackRoute = 'unit.dashboard';
         } elseif ($user->hasRole('supervisor')) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/supervisor';
             $fallbackRoute = 'supervisor.dashboard';

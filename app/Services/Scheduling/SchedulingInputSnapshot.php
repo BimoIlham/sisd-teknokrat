@@ -22,8 +22,7 @@ class SchedulingInputSnapshot
             ->orderBy('lecturer_id')->get(['lecturer_id', 'is_active']);
         $lecturerIds = $targets->pluck('lecturer_id')->merge($supervisors->pluck('lecturer_id'))->unique();
         $schedules = DB::table('teaching_schedules')
-            ->where(fn ($query) => $query->where('academic_term_id', $period->academic_term_id)
-                ->orWhereIn('lecturer_id', $supervisors->pluck('lecturer_id')))
+            ->where('supervision_period_id', $period->id)
             ->orderBy('id')->get(['id', 'academic_term_id', 'lecturer_id', 'course_id', 'faculty_id',
                 'study_program_id', 'class_name', 'room_name', 'delivery_mode', 'day_of_week',
                 'starts_local', 'ends_local', 'effective_from', 'effective_to', 'is_active']);

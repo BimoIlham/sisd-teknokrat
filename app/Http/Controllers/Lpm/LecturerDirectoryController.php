@@ -19,7 +19,9 @@ use App\Models\SystemAudit;
 use App\Models\TeachingOccurrence;
 use App\Models\TeachingSchedule;
 use App\Services\Academic\OccurrenceGeneratorService;
+use App\Services\OrganizationalScope;
 use App\Services\Reporting\SupervisionResultPdfService;
+use App\Services\ScheduleImport\PeriodLecturerExclusions;
 use App\Services\Scheduling\SchedulingLockService;
 use App\Services\Scheduling\WeeklySupervisionScheduleGrouper;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +41,8 @@ class LecturerDirectoryController extends Controller
      */
     public function index(Request $request): View
     {
+        $isUnit = $request->routeIs('unit.*');
+        $scope = $isUnit ? new OrganizationalScope($request->user()) : null;
         $periods = SupervisionPeriod::with('academicTerm')->latest('starts_on')->get();
         $selectedPeriod = $request->filled('period_id')
             ? $periods->firstWhere('id', $request->integer('period_id'))
@@ -52,6 +56,9 @@ class LecturerDirectoryController extends Controller
                 $targetQuery->where('supervision_period_id', $selectedPeriod?->id)
                     ->where('scope_status', 'INCLUDED');
             });
+        if ($scope) {
+            $scope->lecturers($query);
+        }
 
         // Search filter
         if ($search = $request->input('search')) {
@@ -62,8 +69,14 @@ class LecturerDirectoryController extends Controller
         }
 
         // Filter by faculty
-        if ($facultyFilter = $request->input('faculty')) {
+        $facultyFilter = $isUnit ? null : $request->input('faculty');
+        if ($facultyFilter) {
             $query->where('faculty_id', $facultyFilter);
+        }
+        $selectedProgram = $scope && $scope->studyProgramId() === null ? $request->input('study_program_id') : null;
+        if ($selectedProgram) {
+            abort_unless(StudyProgram::whereKey($selectedProgram)->where('faculty_id', $scope->facultyId())->exists(), 404);
+            $query->where('study_program_id', $selectedProgram);
         }
 
         $completeProfileExpression = 'external_code REGEXP ? AND name REGEXP ? AND faculty_id IS NOT NULL AND study_program_id IS NOT NULL';
@@ -102,6 +115,9 @@ class LecturerDirectoryController extends Controller
             ->groupBy('faculty_id');
 
         $selectedFaculty = $facultyFilter;
+        $unitPrograms = $scope && $scope->studyProgramId() === null
+            ? StudyProgram::where('faculty_id', $scope->facultyId())->orderBy('name')->get()
+            : collect();
 
         return view('lpm.lecturers.index', compact(
             'lecturers',
@@ -111,7 +127,11 @@ class LecturerDirectoryController extends Controller
             'faculties',
             'studyProgramsByFaculty',
             'selectedFaculty',
-            'completenessCounts'
+            'completenessCounts',
+            'isUnit',
+            'scope',
+            'unitPrograms',
+            'selectedProgram'
         ));
     }
 
@@ -271,6 +291,18 @@ class LecturerDirectoryController extends Controller
                     SupervisionAssignment::whereIn('id', $unfinalizedAssignmentIds)->delete();
                 }
 
+                $periodId = $validated['period_id'] ?? SupervisionPeriod::where('status', 'ACTIVE')->value('id');
+                if ($periodId) {
+                    $lecturerNames = ScheduleImportRow::where('matched_lecturer_id', $lecturer->id)
+                        ->get(['normalized_payload'])
+                        ->map(fn (ScheduleImportRow $row): ?string => $row->normalized_payload['lecturer_name'] ?? null)
+                        ->push($lecturer->name)
+                        ->push($lecturer->identity_sources['name']['raw_value'] ?? null)
+                        ->push($lecturer->identity_sources['name']['value'] ?? null)
+                        ->filter()->values()->all();
+                    app(PeriodLecturerExclusions::class)->exclude((int) $periodId, $lecturerNames, $request->user()->id);
+                }
+
                 ScheduleImportRow::where('matched_lecturer_id', $lecturer->id)->update([
                     'matched_lecturer_id' => null, 'committed_schedule_id' => null,
                     'validation_status' => 'SKIPPED', 'is_approved' => false,
@@ -305,12 +337,20 @@ class LecturerDirectoryController extends Controller
      */
     public function show(Request $request, Lecturer $lecturer, WeeklySupervisionScheduleGrouper $scheduleGrouper): View
     {
+        $isUnit = $request->routeIs('unit.*');
+        $scope = $isUnit ? new OrganizationalScope($request->user()) : null;
         $lecturer->load(['faculty', 'studyProgram']);
         $periods = SupervisionPeriod::with('academicTerm')->latest('starts_on')->get();
         $selectedPeriod = $request->filled('period_id')
             ? $periods->firstWhere('id', $request->integer('period_id'))
             : ($periods->firstWhere('status', 'ACTIVE') ?? $periods->first());
         abort_if($request->filled('period_id') && ! $selectedPeriod, 404);
+        if ($scope) {
+            abort_unless($selectedPeriod
+                && $scope->lecturers(Lecturer::whereKey($lecturer->id))->exists()
+                && PeriodTarget::where('supervision_period_id', $selectedPeriod->id)
+                    ->where('lecturer_id', $lecturer->id)->included()->exists(), 404);
+        }
 
         // ─── Teaching Schedules ──────────────────────────────────────
         $schedulePeriodIsActive = $selectedPeriod?->status === 'ACTIVE';
@@ -318,6 +358,7 @@ class LecturerDirectoryController extends Controller
             ? TeachingSchedule::with(['course', 'faculty', 'studyProgram'])
                 ->where('lecturer_id', $lecturer->id)
                 ->where('academic_term_id', $selectedPeriod->academic_term_id)
+                ->where('supervision_period_id', $selectedPeriod->id)
                 ->where('is_active', true)
                 ->orderBy('day_of_week')
                 ->orderBy('starts_local')
@@ -329,7 +370,7 @@ class LecturerDirectoryController extends Controller
             $stagingRows = ScheduleImportRow::where('matched_lecturer_id', $lecturer->id)
                 ->where('validation_status', 'VALID')
                 ->where('is_approved', true)
-                ->when($selectedPeriod, fn ($query) => $query->whereHas('import', fn ($import) => $import->where('academic_term_id', $selectedPeriod->academic_term_id)))
+                ->when($selectedPeriod, fn ($query) => $query->whereHas('import', fn ($import) => $import->where('supervision_period_id', $selectedPeriod->id)))
                 ->orderBy('row_no')
                 ->get();
 
@@ -376,6 +417,8 @@ class LecturerDirectoryController extends Controller
         ])
             ->where('supervisor_lecturer_id', $lecturer->id)
             ->when($selectedPeriod, fn ($query) => $query->whereHas('stage', fn ($stageQuery) => $stageQuery->where('supervision_period_id', $selectedPeriod->id)))
+            ->when($scope, fn ($query) => $query->whereHas('targetLecturer', fn ($lecturers) => $scope->lecturers($lecturers))
+                ->whereHas('targetLecturer.periodTargets', fn ($targets) => $targets->where('supervision_period_id', $selectedPeriod->id)->included()))
             ->where('status', '<>', 'CANCELLED')
             ->orderBy('starts_at')
             ->get();
@@ -525,7 +568,7 @@ class LecturerDirectoryController extends Controller
             'stage.period.academicTerm',
             'supervisorLecturer',
             'teachingOccurrence.teachingSchedule.course',
-            'supervision',
+            'supervision' => fn ($query) => $scope ? $query->where('status', 'SUBMITTED') : $query,
         ])
             ->where('target_lecturer_id', $lecturer->id)
             ->when($selectedPeriod, fn ($query) => $query->whereHas('stage', fn ($stageQuery) => $stageQuery->where('supervision_period_id', $selectedPeriod->id)))
@@ -633,7 +676,8 @@ class LecturerDirectoryController extends Controller
             't2Assignments',
             'comparisons',
             'avgScore',
-            'findings'
+            'findings',
+            'isUnit'
         ));
     }
 
@@ -744,6 +788,7 @@ class LecturerDirectoryController extends Controller
         abort_unless(
             $schedule->lecturer_id === $lecturer->id
                 && $schedule->academic_term_id === $period->academic_term_id
+                && $schedule->supervision_period_id === $period->id
                 && $schedule->is_active,
             404
         );
@@ -788,7 +833,7 @@ class LecturerDirectoryController extends Controller
             $this->ensureActiveSchedulePeriod($period);
             $schedule = TeachingSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
             abort_unless($schedule->is_active && $schedule->lecturer_id === $lecturer->id
-                && $schedule->academic_term_id === $period->academic_term_id, 404);
+                && $schedule->supervision_period_id === $period->id, 404);
             $sourceRow = $schedule->source_row_id
                 ? ScheduleImportRow::whereKey($schedule->source_row_id)->lockForUpdate()->first()
                 : null;
@@ -839,6 +884,7 @@ class LecturerDirectoryController extends Controller
         abort_unless(
             $schedule->lecturer_id === $lecturer->id
                 && $schedule->academic_term_id === $period->academic_term_id
+                && $schedule->supervision_period_id === $period->id
                 && $schedule->is_active,
             404
         );
@@ -850,7 +896,7 @@ class LecturerDirectoryController extends Controller
             $this->ensureActiveSchedulePeriod($period);
             $lockedSchedule = TeachingSchedule::whereKey($schedule->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSchedule->is_active && $lockedSchedule->lecturer_id === $lecturer->id
-                && $lockedSchedule->academic_term_id === $period->academic_term_id, 404);
+                && $lockedSchedule->supervision_period_id === $period->id, 404);
             $lockedSchedule->occurrences()->lockForUpdate()->get(['id']);
             $hasAssignments = $lockedSchedule->occurrences()->whereHas('assignments')->exists();
 
@@ -1037,6 +1083,7 @@ class LecturerDirectoryController extends Controller
 
         return [
             'academic_term_id' => $period->academic_term_id,
+            'supervision_period_id' => $period->id,
             'lecturer_id' => $lecturer->id,
             'course_id' => $course->id,
             'faculty_id' => $lecturer->faculty_id,

@@ -34,6 +34,13 @@ ROOM_PATTERN = re.compile(
 )
 CLASS_PATTERN = re.compile(r'^[A-Z][A-Z0-9]{1,5}\s*(?:\d{2}\b|RPL\b|GAB\b)', re.IGNORECASE)
 
+def split_lecturer_identity(lecturer_text: str) -> tuple[str, Optional[str]]:
+    code_match = re.search(r'[\[(]([0-9]{10})[\])]', lecturer_text)
+    if not code_match:
+        return lecturer_text, None
+    clean_name = (lecturer_text[:code_match.start()] + lecturer_text[code_match.end():]).strip()
+    return clean_name or lecturer_text, code_match.group(1)
+
 def normalize_time_str(hour: str, minute: str) -> str:
     h = int(hour)
     m = int(minute)
@@ -48,7 +55,7 @@ class ResourceLimitError(ValueError):
 
 
 class SchedulePdfParser:
-    def __init__(self, name: str = "tabular-layout-a", version: str = "1.2.0"):
+    def __init__(self, name: str = "tabular-layout-a", version: str = "1.3.0"):
         self.name = name
         self.version = version
 
@@ -308,13 +315,7 @@ class SchedulePdfParser:
         if delivery_mode in ('OFFLINE', 'HYBRID') and not room_text:
             issues.append(ValidationIssue(code="MISSING_FIELD", field="room_name", message="Ruang wajib diisi untuk perkuliahan Offline.", severity="ERROR"))
 
-        # Extract lecturer external code if exists e.g. "Dosen Nama [12345]" or "(12345)"
-        external_code = None
-        code_match = re.search(r'\[([A-Za-z0-9_\-]+)\]|\(([A-Za-z0-9_\-]+)\)', lecturer_text)
-        clean_lecturer = lecturer_text
-        if code_match:
-            external_code = code_match.group(1) or code_match.group(2)
-            clean_lecturer = re.sub(r'\[([A-Za-z0-9_\-]+)\]|\(([A-Za-z0-9_\-]+)\)', '', lecturer_text).strip()
+        clean_lecturer, external_code = split_lecturer_identity(lecturer_text)
 
         fac_name, prd_name = resolve_faculty_and_prodi(faculty_text, class_text)
         if prodi_text:
@@ -554,6 +555,8 @@ class SchedulePdfParser:
         if self._is_team_label(lecturer):
             return []
 
+        clean_lecturer, external_code = split_lecturer_identity(lecturer or "")
+
         day_cols = {}
         time_col = None
         header_row_idx = None
@@ -623,7 +626,8 @@ class SchedulePdfParser:
                     issues.append(ValidationIssue(code="MISSING_FIELD", field="lecturer_name", message="Nama dosen pada halaman ini tidak teridentifikasi.", severity="ERROR"))
 
                 normalized = NormalizedRow(
-                    lecturer_name=lecturer or "",
+                    lecturer_name=clean_lecturer,
+                    lecturer_external_code=external_code,
                     faculty_name=cell_fac,
                     study_program_name=cell_prodi,
                     semester=default_semester or "GANJIL",

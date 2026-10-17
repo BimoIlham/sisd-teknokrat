@@ -59,7 +59,7 @@ class CandidateBuilder
 
         // Occurrences within stage date range for target lecturers
         $occurrences = TeachingOccurrence::whereHas('teachingSchedule', function ($q) use ($targetLecturerIds, $period) {
-            $q->whereIn('lecturer_id', $targetLecturerIds)->where('academic_term_id', $period->academic_term_id)->where('is_active', true);
+            $q->whereIn('lecturer_id', $targetLecturerIds)->where('supervision_period_id', $period->id)->where('is_active', true);
         })
             ->where('status', 'SCHEDULED')
             ->whereBetween('occurs_on', [$stage->start_date, $stage->end_date])

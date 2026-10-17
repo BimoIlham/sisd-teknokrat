@@ -18,11 +18,14 @@ class ConflictChecker
     /** @var array<string, SupervisionAssignment|null> */
     private array $firstStageAssignmentsByTarget = [];
 
+    private ?int $periodId = null;
+
     public function reset(): void
     {
         $this->teachingOccurrencesBySupervisorAndDate = [];
         $this->assignmentsBySupervisor = [];
         $this->firstStageAssignmentsByTarget = [];
+        $this->periodId = null;
     }
 
     /**
@@ -33,6 +36,7 @@ class ConflictChecker
      */
     public function primeForCandidates(Collection $occurrences, Collection $supervisorLecturerIds, SupervisionStage $stage): void
     {
+        $this->periodId = $stage->supervision_period_id;
         $this->teachingOccurrencesBySupervisorAndDate = [];
         $this->assignmentsBySupervisor = [];
         $this->firstStageAssignmentsByTarget = [];
@@ -59,7 +63,7 @@ class ConflictChecker
         }
 
         $teachingOccurrences = TeachingOccurrence::query()
-            ->whereHas('teachingSchedule', fn ($query) => $query->whereIn('lecturer_id', $supervisorIds)->where('is_active', true))
+            ->whereHas('teachingSchedule', fn ($query) => $query->whereIn('lecturer_id', $supervisorIds)->where('supervision_period_id', $stage->supervision_period_id)->where('is_active', true))
             ->where('status', 'SCHEDULED')
             ->whereIn('occurs_on', $dates)
             ->with('teachingSchedule:id,lecturer_id')
@@ -78,6 +82,7 @@ class ConflictChecker
         $rangeEnd = $occurrences->max(fn (TeachingOccurrence $occurrence) => $occurrence->ends_at);
         $assignments = SupervisionAssignment::query()
             ->whereIn('supervisor_lecturer_id', $supervisorIds)
+            ->whereHas('supervisionStage', fn ($query) => $query->where('supervision_period_id', $stage->supervision_period_id))
             ->where('status', '<>', 'CANCELLED')
             ->where('starts_at', '<', $rangeEnd)
             ->where('ends_at', '>', $rangeStart)
@@ -132,12 +137,16 @@ class ConflictChecker
         array $ignoredAssignmentIds = []
     ): array {
         $conflicts = [];
+        $this->periodId = $stage->supervision_period_id;
         $targetLecturerId = $occurrence->teachingSchedule->lecturer_id;
         if ($occurrence->status !== 'SCHEDULED' || ! $occurrence->teachingSchedule->is_active) {
             $conflicts[] = 'Jadwal perkuliahan belum aktif atau pertemuan sudah dibatalkan.';
         }
         if ($occurrence->teachingSchedule->academic_term_id !== $stage->supervisionPeriod->academic_term_id) {
             $conflicts[] = 'Jadwal perkuliahan harus berasal dari semester pada periode supervisi ini.';
+        }
+        if ((int) $occurrence->teachingSchedule->supervision_period_id !== (int) $stage->supervision_period_id) {
+            $conflicts[] = 'Jadwal perkuliahan harus berasal dari periode supervisi ini.';
         }
 
         // H01: Self-supervision is strictly forbidden
@@ -219,7 +228,7 @@ class ConflictChecker
         $key = $this->teachingCacheKey($supervisorLecturerId, $date);
         if (! array_key_exists($key, $this->teachingOccurrencesBySupervisorAndDate)) {
             $this->teachingOccurrencesBySupervisorAndDate[$key] = TeachingOccurrence::query()
-                ->whereHas('teachingSchedule', fn ($query) => $query->where('lecturer_id', $supervisorLecturerId)->where('is_active', true))
+                ->whereHas('teachingSchedule', fn ($query) => $query->where('lecturer_id', $supervisorLecturerId)->where('supervision_period_id', $this->periodId)->where('is_active', true))
                 ->where('status', 'SCHEDULED')
                 ->where('occurs_on', $date)
                 ->get(['id', 'teaching_schedule_id', 'occurs_on', 'starts_at', 'ends_at']);
@@ -236,6 +245,7 @@ class ConflictChecker
         if (! array_key_exists($supervisorLecturerId, $this->assignmentsBySupervisor)) {
             $this->assignmentsBySupervisor[$supervisorLecturerId] = SupervisionAssignment::query()
                 ->where('supervisor_lecturer_id', $supervisorLecturerId)
+                ->whereHas('supervisionStage', fn ($query) => $query->where('supervision_period_id', $this->periodId))
                 ->where('status', '<>', 'CANCELLED')
                 ->get(['id', 'supervisor_lecturer_id', 'teaching_occurrence_id', 'starts_at', 'ends_at']);
         }

@@ -318,7 +318,7 @@ class AssignmentWorkspaceController extends Controller
             ->where('lecturer_id', $lecturer->id)->where('scope_status', 'INCLUDED')->exists(), 404);
 
         $occurrences = TeachingOccurrence::whereHas('teachingSchedule', fn ($query) => $query
-            ->where('lecturer_id', $lecturer->id)->where('academic_term_id', $stage->period->academic_term_id)->where('is_active', true))
+            ->where('lecturer_id', $lecturer->id)->where('supervision_period_id', $stage->period->id)->where('is_active', true))
             ->where('status', 'SCHEDULED')->whereBetween('occurs_on', [$stage->start_date, $stage->end_date])
             ->with('teachingSchedule.course')->orderBy('occurs_on')->orderBy('starts_at')->get()
             ->map(fn (TeachingOccurrence $occurrence): array => [

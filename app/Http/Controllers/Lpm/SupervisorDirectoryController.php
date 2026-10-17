@@ -97,6 +97,7 @@ class SupervisorDirectoryController extends Controller
                 'teachingSchedules as teaching_schedules_count' => function ($q) use ($selectedPeriod): void {
                     $q->where('is_active', true)
                         ->where('academic_term_id', $selectedPeriod?->academic_term_id);
+                    $q->where('supervision_period_id', $selectedPeriod?->id);
                 },
             ]);
 
@@ -132,7 +133,7 @@ class SupervisorDirectoryController extends Controller
         $rotationSelections = [];
         foreach ($supervisors as $supervisor) {
             $user = $supervisor->user;
-            if ($user && $user->hasRole('supervisor') && ! $user->hasRole('superadmin') && $user->id !== $request->user()->id) {
+            if ($user && $user->hasRole('supervisor') && ! $user->isLpmStaff() && $user->id !== $request->user()->id) {
                 $rotationSelections[$supervisor->id] = Crypt::encryptString(json_encode([
                     'user_id' => $user->id,
                     'actor_id' => $request->user()->id,
@@ -313,7 +314,7 @@ class SupervisorDirectoryController extends Controller
     public function rotateLegacyCredential(Request $request, Lecturer $supervisor): RedirectResponse
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->is_active && $actor->hasRole('superadmin'), 403);
+        abort_unless($actor->is_active && $actor->isLpmStaff(), 403);
         $validated = $request->validate([
             'period_id' => ['required', 'integer', 'exists:supervision_periods,id'],
             'confirm_email' => ['required', 'email'],
@@ -330,7 +331,7 @@ class SupervisorDirectoryController extends Controller
         try {
             $encryptedCredential = DB::transaction(function () use ($request, $supervisor, $validated, $selection, $temporaryPassword): string {
                 $user = User::where('lecturer_id', $supervisor->id)->lockForUpdate()->firstOrFail();
-                abort_unless($user->hasRole('supervisor') && ! $user->hasRole('superadmin') && $user->id !== $request->user()->id, 403);
+                abort_unless($user->hasRole('supervisor') && ! $user->isLpmStaff() && $user->id !== $request->user()->id, 403);
                 abort_unless(PeriodSupervisor::where('lecturer_id', $supervisor->id)
                     ->where('supervision_period_id', $validated['period_id'])->exists(), 404);
                 if (! is_array($selection)
@@ -373,7 +374,7 @@ class SupervisorDirectoryController extends Controller
     public function resetPassword(Request $request, Lecturer $supervisor): RedirectResponse
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor?->is_active && $actor->hasRole('superadmin'), 403);
+        abort_unless($actor?->is_active && $actor->isLpmStaff(), 403);
         $validated = $request->validate([
             'period_id' => ['required', 'integer', 'exists:supervision_periods,id'],
             'confirm_email' => ['required', 'email'],
@@ -395,7 +396,7 @@ class SupervisorDirectoryController extends Controller
                 $locks->period((int) $validated['period_id']);
                 $supervisor = Lecturer::whereKey($supervisor->id)->lockForUpdate()->firstOrFail();
                 $user = User::where('lecturer_id', $supervisor->id)->lockForUpdate()->firstOrFail();
-                abort_unless($user->hasRole('supervisor') && ! $user->hasRole('superadmin') && $user->id !== $request->user()->id, 403);
+                abort_unless($user->hasRole('supervisor') && ! $user->isLpmStaff() && $user->id !== $request->user()->id, 403);
                 abort_unless(PeriodSupervisor::where('lecturer_id', $supervisor->id)
                     ->where('supervision_period_id', $validated['period_id'])->where('is_active', true)->exists(), 404);
                 if (! is_array($selection)
