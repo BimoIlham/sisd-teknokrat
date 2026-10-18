@@ -34,6 +34,20 @@ class SchedulingResourceProtectionTest extends TestCase
         $this->assertSame(2, ScheduleRun::count());
     }
 
+    public function test_browser_generation_limit_returns_to_workspace_with_a_message(): void
+    {
+        $workspace = route('lpm.assignments.index', ['stage_id' => $this->stage->id]);
+        $solve = route('lpm.assignments.run_solver', $this->stage);
+
+        $this->from($workspace)->post($solve)->assertRedirect($workspace);
+        $this->from($workspace)->post($solve)->assertRedirect($workspace);
+        $this->from($workspace)->post($solve)
+            ->assertRedirect($workspace)
+            ->assertSessionHas('error', 'Penjadwalan otomatis dibatasi dua kali per menit. Tunggu sebentar sebelum mencoba lagi.');
+
+        $this->assertSame(2, ScheduleRun::count());
+    }
+
     public function test_a_different_administrator_has_a_separate_request_budget(): void
     {
         for ($attempt = 0; $attempt < 2; $attempt++) {
@@ -65,6 +79,23 @@ class SchedulingResourceProtectionTest extends TestCase
         $run = app(SolverClientService::class)->solve($this->stage, $this->admin);
         $this->assertSame('OPTIMAL', $run->status);
         $this->assertTrue($called);
+    }
+
+    public function test_interrupted_generation_from_another_stage_does_not_lock_the_period_forever(): void
+    {
+        $interrupted = ScheduleRun::create([
+            'supervision_stage_id' => $this->secondStage->id,
+            'created_by' => $this->admin->id,
+            'status' => 'RUNNING',
+            'started_at' => now()->subMinutes(6),
+        ]);
+
+        $replacement = app(SolverClientService::class)->solve($this->stage, $this->admin);
+
+        $this->assertSame('FAILED', $interrupted->fresh()->status);
+        $this->assertSame('STALE_RUN_RECOVERED', $interrupted->fresh()->error_code);
+        $this->assertNotNull($interrupted->fresh()->finished_at);
+        $this->assertSame('OPTIMAL', $replacement->status);
     }
 
     #[TestWith([0])]

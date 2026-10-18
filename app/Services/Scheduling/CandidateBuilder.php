@@ -63,7 +63,7 @@ class CandidateBuilder
         })
             ->where('status', 'SCHEDULED')
             ->whereBetween('occurs_on', [$stage->start_date, $stage->end_date])
-            ->with(['teachingSchedule.course', 'teachingSchedule.lecturer', 'teachingSchedule.studyProgram'])
+            ->with('teachingSchedule')
             ->orderBy('id')->get();
 
         $this->conflictChecker->primeForCandidates(
@@ -82,8 +82,6 @@ class CandidateBuilder
             $dayOfWeek = $schedule->day_of_week ?? (int) $occ->occurs_on->format('N');
             $startTime = $occ->start_time_local;
             $endTime = $occ->end_time_local;
-            $startsAt = $occ->starts_at?->toIso8601String();
-            $endsAt = $occ->ends_at?->toIso8601String();
             $pairedAssignment = $pairedAssignmentsByTarget->get($targetId);
             $pairedOccurrence = $pairedAssignment?->teachingOccurrence;
             if ($pairedAssignment && (! $pairedOccurrence || ! $occ->hasSameSupervisionSlotAs($pairedOccurrence))) {
@@ -94,6 +92,7 @@ class CandidateBuilder
             $eligibleSupervisors = $pairedSupervisorId
                 ? $supervisors->where('lecturer_id', $pairedSupervisorId)
                 : $supervisors;
+            $baseCandidate = null;
 
             foreach ($eligibleSupervisors as $sup) {
                 $supId = $sup->lecturer_id;
@@ -101,28 +100,19 @@ class CandidateBuilder
                 $check = $this->conflictChecker->check($occ, $supId, $stage);
 
                 if ($check['valid']) {
-                    $candidates[] = [
-                        'stage_id' => $stage->id,
+                    $baseCandidate ??= [
                         'occurrence_id' => $occ->id,
                         'target_lecturer_id' => $targetId,
-                        'target_name' => $schedule->lecturer->name,
-                        'supervisor_lecturer_id' => $supId,
-                        'supervisor_name' => $sup->lecturer->name,
                         'date' => $date,
                         'day_of_week' => (int) $dayOfWeek,
                         'start_time' => $startTime,
                         'end_time' => $endTime,
-                        'starts_at' => $startsAt,
-                        'ends_at' => $endsAt,
-                        'course_id' => (int) $schedule->course_id,
-                        'course_code' => $schedule->course->code,
-                        'course_name' => $schedule->course->name,
-                        'class_name' => $schedule->class_name,
                         'schedule_identity' => $schedule->supervisionIdentity(),
-                        'room' => $schedule->room_display,
-                        'room_name' => $schedule->room_name,
                         'delivery_mode' => $schedule->delivery_mode,
                     ];
+                    $candidate = $baseCandidate;
+                    $candidate['supervisor_lecturer_id'] = $supId;
+                    $candidates[] = $candidate;
                 }
             }
         }

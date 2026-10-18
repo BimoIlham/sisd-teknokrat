@@ -18,6 +18,8 @@ use Throwable;
 
 class SolverClientService
 {
+    private const STALE_RUN_AFTER_MINUTES = 5;
+
     public function __construct(
         protected CandidateBuilder $candidateBuilder,
         protected ConflictChecker $conflictChecker,
@@ -56,6 +58,18 @@ class SolverClientService
             $state = $this->locks->state();
             $lockedStage = $this->locks->stage($stage->id);
             $period = $lockedStage->supervisionPeriod;
+            $recoveredRuns = ScheduleRun::whereHas('stage', fn ($query) => $query->where('supervision_period_id', $period->id))
+                ->where('status', 'RUNNING')
+                ->where('started_at', '<', now()->subMinutes(self::STALE_RUN_AFTER_MINUTES))
+                ->update([
+                    'status' => 'FAILED',
+                    'finished_at' => now(),
+                    'error_code' => 'STALE_RUN_RECOVERED',
+                    'error_message' => 'Proses solver tidak selesai dan dipulihkan secara otomatis.',
+                ]);
+            if ($recoveredRuns > 0) {
+                Log::warning('Recovered interrupted solver runs', ['period_id' => $period->id, 'count' => $recoveredRuns]);
+            }
             if (ScheduleRun::whereHas('stage', fn ($query) => $query->where('supervision_period_id', $period->id))
                 ->where('status', 'RUNNING')->exists()) {
                 throw new ConflictHttpException('Penyusunan usulan pada periode ini masih berjalan. Tunggu hingga proses selesai.');
@@ -73,8 +87,21 @@ class SolverClientService
             return $state->revision;
         }, 3);
         $stage = $stage->fresh(['supervisionPeriod.stages']);
+        $preparationStartedAt = microtime(true);
+        Log::info('Solver input preparation started', ['run_id' => $run->id, 'stage_id' => $stage->id]);
         $sources = $this->snapshots->capture($stage);
+        Log::info('Solver input snapshot ready', [
+            'run_id' => $run->id,
+            'elapsed_ms' => (int) ((microtime(true) - $preparationStartedAt) * 1000),
+            'peak_memory_bytes' => memory_get_peak_usage(true),
+        ]);
         $pool = $this->candidateBuilder->build($stage);
+        Log::info('Solver candidate pool ready', [
+            'run_id' => $run->id,
+            'candidates' => count($pool['candidates']),
+            'elapsed_ms' => (int) ((microtime(true) - $preparationStartedAt) * 1000),
+            'peak_memory_bytes' => memory_get_peak_usage(true),
+        ]);
 
         // Fetch existing locked assignments (MANUAL or FINAL) to ensure stability
         $lockedAssignments = SupervisionAssignment::where('supervision_stage_id', $stage->id)
@@ -105,6 +132,9 @@ class SolverClientService
         DB::transaction(function () use ($run, $revision): void {
             if ($this->locks->state()->revision !== $revision) {
                 throw new ConflictHttpException('Usulan sudah kedaluwarsa karena data penjadwalan berubah. Buat usulan baru.');
+            }
+            if (ScheduleRun::whereKey($run->id)->lockForUpdate()->value('status') !== 'RUNNING') {
+                throw new ConflictHttpException('Proses penjadwalan sebelumnya telah dihentikan. Buat usulan baru.');
             }
             $run->save();
         }, 3);
@@ -151,6 +181,9 @@ class SolverClientService
         $run->completed_at = now();
         DB::transaction(function () use ($run, $revision, $stage, $sources): void {
             $state = $this->locks->state();
+            if (ScheduleRun::whereKey($run->id)->lockForUpdate()->value('status') !== 'RUNNING') {
+                throw new ConflictHttpException('Proses penjadwalan sebelumnya telah dihentikan. Buat usulan baru.');
+            }
             $freshSources = $this->snapshots->capture($stage);
             if ($state->revision !== $revision || $this->snapshots->hash($freshSources) !== $this->snapshots->hash($sources)) {
                 $run->status = 'STALE';
