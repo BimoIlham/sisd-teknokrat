@@ -118,6 +118,8 @@ class ScheduleImportService
         $parsedRows = $knownDocument['rows'] ?? [];
         $pageCount = $knownDocument['page_count'] ?? 1;
         $parserOutdated = false;
+        $parserHttpStatus = null;
+        $parserExecuted = false;
 
         // 1. Try Python HTTP endpoint first
         if (empty($parsedRows)) {
@@ -130,6 +132,7 @@ class ScheduleImportService
                         fclose($stream);
                     }
                 }
+                $parserHttpStatus = $response->status();
                 $connection->assertAuthenticated($response);
                 if (in_array($response->status(), [413, 422], true) || ($response->status() === 503 && $response->json('detail.code') === 'RESOURCE_BUSY')) {
                     $message = 'PDF tidak memenuhi batas pemrosesan atau service sedang sibuk. Maksimal 15 MB, 200 halaman, dan teks yang dapat diproses.';
@@ -140,6 +143,7 @@ class ScheduleImportService
                 if ($response->successful()) {
                     $data = $response->json();
                     if (version_compare($data['parser']['version'] ?? '0.0.0', self::PARSER_VERSION, '>=')) {
+                        $parserExecuted = true;
                         $parsedRows = $data['rows'] ?? [];
                         $pageCount = $data['page_count'] ?? 1;
                     } else {
@@ -153,10 +157,10 @@ class ScheduleImportService
 
         // 2. Direct Python CLI execution fallback (ensures 100% availability without background daemon)
         if (empty($parsedRows)) {
-            $pythonExe = base_path('python-service/venv/Scripts/python.exe');
+            $pythonExe = $this->localParserExecutable();
             $cliScript = base_path('python-service/cli_parse.py');
 
-            if (file_exists($pythonExe) && file_exists($cliScript)) {
+            if ($pythonExe && file_exists($pythonExe) && file_exists($cliScript)) {
                 try {
                     $env = array_merge(
                         getenv(),
@@ -180,10 +184,13 @@ class ScheduleImportService
                         if ($jsonStart !== false) {
                             $jsonStr = substr($cliOutput, $jsonStart);
                             $data = json_decode($jsonStr, true);
-                            if (! empty($data['rows'])
+                            if (is_array($data)
                                 && version_compare($data['parser']['version'] ?? '0.0.0', self::PARSER_VERSION, '>=')) {
-                                $parsedRows = $data['rows'];
+                                $parserExecuted = true;
+                                $parsedRows = $data['rows'] ?? [];
                                 $pageCount = $data['page_count'] ?? 1;
+                            } elseif (is_array($data)) {
+                                $parserOutdated = true;
                             }
                         }
                     } else {
@@ -198,6 +205,24 @@ class ScheduleImportService
         if (empty($parsedRows) && $parserOutdated) {
             $message = 'Parser PDF di server belum versi '.self::PARSER_VERSION.'. Perbarui layanan Python bersama aplikasi sebelum mengunggah jadwal.';
             $import->update(['status' => 'FAILED', 'error_message' => $message]);
+            throw ValidationException::withMessages(['schedule_pdf' => $message]);
+        }
+
+        if (empty($parsedRows)) {
+            if ($parserExecuted) {
+                $message = 'PDF berhasil diterima, tetapi tidak ada baris jadwal yang terbaca. Pastikan berkas berisi tabel jadwal dengan teks yang dapat dibaca.';
+            } elseif ($parserHttpStatus !== null) {
+                $message = 'Layanan pembaca PDF gagal memproses berkas (HTTP '.$parserHttpStatus.'). Periksa log layanan Python di server.';
+            } else {
+                $message = 'Layanan pembaca PDF tidak dapat dihubungi dan parser lokal belum tersedia. Pastikan layanan Python aktif di server CyberPanel.';
+            }
+            $import->update([
+                'status' => 'FAILED',
+                'page_count' => $pageCount,
+                'parsed_at' => now(),
+                'parser_version' => self::PARSER_VERSION,
+                'error_message' => $message,
+            ]);
             throw ValidationException::withMessages(['schedule_pdf' => $message]);
         }
 
@@ -360,6 +385,21 @@ class ScheduleImportService
         } catch (\Throwable) {
         }
         Log::warning('Pembersihan berkas impor gagal.', ['file_path' => $path]);
+    }
+
+    private function localParserExecutable(): ?string
+    {
+        $configuredExecutable = config('services.python.binary');
+        if (is_string($configuredExecutable) && trim($configuredExecutable) !== '') {
+            return trim($configuredExecutable);
+        }
+
+        $relativePath = PHP_OS_FAMILY === 'Windows'
+            ? 'python-service/venv/Scripts/python.exe'
+            : 'python-service/venv/bin/python';
+        $executable = base_path($relativePath);
+
+        return is_file($executable) ? $executable : null;
     }
 
     /**

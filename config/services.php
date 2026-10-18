@@ -5,6 +5,7 @@ return [
     'python' => [
         'url' => env('PYTHON_SERVICE_URL', 'http://127.0.0.1:8100'),
         'secret' => env('PYTHON_SERVICE_SECRET'),
+        'binary' => env('PYTHON_SERVICE_PYTHON'),
     ],
 
     /*

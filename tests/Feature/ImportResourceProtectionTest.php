@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ScheduleImport;
 use App\Services\ScheduleImport\ScheduleImportService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -88,5 +89,47 @@ class ImportResourceProtectionTest extends TestCase
         Storage::disk('local')->assertExists($import->stored_path);
         $this->assertCount(1, Storage::disk('local')->allFiles());
         Http::assertSentCount(1);
+    }
+
+    public function test_empty_pdf_parse_fails_with_a_clear_message_instead_of_becoming_an_empty_review(): void
+    {
+        config(['services.python.binary' => base_path('python-service/missing-test-python')]);
+        $message = 'PDF berhasil diterima, tetapi tidak ada baris jadwal yang terbaca. Pastikan berkas berisi tabel jadwal dengan teks yang dapat dibaca.';
+        Http::fake(['*' => Http::response([
+            'parser' => ['version' => '1.3.0'],
+            'rows' => [],
+            'page_count' => 1,
+        ])]);
+
+        try {
+            app(ScheduleImportService::class)->import($this->file(), $this->period->academicTerm, $this->admin);
+            $this->fail('A PDF with no parsed rows should produce an actionable error.');
+        } catch (ValidationException $exception) {
+            $this->assertSame($message, $exception->errors()['schedule_pdf'][0]);
+        }
+
+        $import = ScheduleImport::sole();
+        $this->assertSame('FAILED', $import->status);
+        $this->assertSame(0, $import->rows()->count());
+        $this->assertSame($message, $import->error_message);
+    }
+
+    public function test_unavailable_parser_is_reported_instead_of_creating_an_empty_review(): void
+    {
+        config(['services.python.binary' => base_path('python-service/missing-test-python')]);
+        Http::fake(['*' => fn () => throw new ConnectionException('Parser service unavailable')]);
+        $message = 'Layanan pembaca PDF tidak dapat dihubungi dan parser lokal belum tersedia. Pastikan layanan Python aktif di server CyberPanel.';
+
+        try {
+            app(ScheduleImportService::class)->import($this->file(), $this->period->academicTerm, $this->admin);
+            $this->fail('An unavailable parser should produce an actionable error.');
+        } catch (ValidationException $exception) {
+            $this->assertSame($message, $exception->errors()['schedule_pdf'][0]);
+        }
+
+        $import = ScheduleImport::sole();
+        $this->assertSame('FAILED', $import->status);
+        $this->assertSame($message, $import->error_message);
+        $this->assertSame(0, $import->rows()->count());
     }
 }
