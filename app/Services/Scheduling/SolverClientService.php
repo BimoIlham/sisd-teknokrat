@@ -88,7 +88,12 @@ class SolverClientService
         }, 3);
         $stage = $stage->fresh(['supervisionPeriod.stages']);
         $preparationStartedAt = microtime(true);
-        Log::info('Solver input preparation started', ['run_id' => $run->id, 'stage_id' => $stage->id]);
+        Log::info('Solver input preparation started', [
+            'run_id' => $run->id,
+            'stage_id' => $stage->id,
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => ini_get('max_execution_time'),
+        ]);
         $sources = $this->snapshots->capture($stage);
         Log::info('Solver input snapshot ready', [
             'run_id' => $run->id,
@@ -138,6 +143,11 @@ class SolverClientService
             }
             $run->save();
         }, 3);
+        Log::info('Solver input payload saved', [
+            'run_id' => $run->id,
+            'elapsed_ms' => (int) ((microtime(true) - $preparationStartedAt) * 1000),
+            'peak_memory_bytes' => memory_get_peak_usage(true),
+        ]);
 
         $solvedExternally = false;
 

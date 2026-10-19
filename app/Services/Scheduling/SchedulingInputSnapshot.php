@@ -58,27 +58,51 @@ class SchedulingInputSnapshot
     /** @param array<string, mixed> $input */
     public function hash(array $input): string
     {
-        return hash('sha256', json_encode($this->canonicalize($input), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+        $context = hash_init('sha256');
+        $this->updateCanonicalHash($context, $input);
+
+        return hash_final($context);
     }
 
-    private function canonicalize(mixed $value): mixed
+    /** Write canonical JSON directly to the hash without duplicating the complete snapshot. */
+    private function updateCanonicalHash(\HashContext $context, mixed $value, int $depth = 0): void
     {
         if ($value instanceof \JsonSerializable) {
-            return $this->canonicalize($value->jsonSerialize());
+            $this->updateCanonicalHash($context, $value->jsonSerialize(), $depth);
+
+            return;
         }
         if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d\TH:i:s.uP');
+            $value = $value->format('Y-m-d\TH:i:s.uP');
         }
         if (is_object($value)) {
             $value = get_object_vars($value);
         }
         if (! is_array($value)) {
-            return $value;
+            hash_update($context, json_encode($value, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+
+            return;
+        }
+        if ($depth >= 512) {
+            throw new \JsonException('Maximum stack depth exceeded', JSON_ERROR_DEPTH);
         }
         if (! array_is_list($value)) {
             ksort($value, SORT_STRING);
         }
 
-        return array_map(fn (mixed $item): mixed => $this->canonicalize($item), $value);
+        $isList = array_is_list($value);
+        hash_update($context, $isList ? '[' : '{');
+        $isFirst = true;
+        foreach ($value as $key => $item) {
+            if (! $isFirst) {
+                hash_update($context, ',');
+            }
+            $isFirst = false;
+            if (! $isList) {
+                hash_update($context, json_encode((string) $key, JSON_THROW_ON_ERROR).':');
+            }
+            $this->updateCanonicalHash($context, $item, $depth + 1);
+        }
+        hash_update($context, $isList ? ']' : '}');
     }
 }
