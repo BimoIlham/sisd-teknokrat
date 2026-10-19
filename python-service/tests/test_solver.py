@@ -254,3 +254,59 @@ def test_solver_uses_available_supervisors_before_giving_anyone_an_extra_assignm
     assert result.coverage_status == "FULL"
     assert {assignment.supervisor_id for assignment in result.assignments} == {10, 20, 30}
     assert result.diagnostics["eligible_but_unused_supervisor_ids"] == []
+
+
+def test_solver_meets_soft_minimum_supervisor_load_when_previous_result_is_unbalanced():
+    targets = [TargetLecturer(id=target_id, name=f"Target {target_id}") for target_id in range(1, 11)]
+    supervisors = [
+        SupervisorLecturer(id=10, name="Supervisor 10"),
+        SupervisorLecturer(id=20, name="Supervisor 20"),
+        SupervisorLecturer(id=30, name="Supervisor 30"),
+    ]
+    occurrences = [
+        TeachingOccurrence(
+            id=100 + target_id,
+            target_id=target_id,
+            occurs_on=f"2026-10-{target_id:02d}",
+            starts_at=f"2026-10-{target_id:02d}T01:00:00Z",
+            ends_at=f"2026-10-{target_id:02d}T02:40:00Z",
+            course_name=f"Course {target_id}",
+            class_name=f"Class {target_id}",
+            allowed_supervisor_ids=[10, 20, 30],
+        )
+        for target_id in range(1, 11)
+    ]
+    previous_assignments = [
+        AssignmentItem(target_id=target_id, supervisor_id=10, occurrence_id=100 + target_id)
+        for target_id in range(1, 5)
+    ] + [
+        AssignmentItem(target_id=target_id, supervisor_id=20, occurrence_id=100 + target_id)
+        for target_id in range(5, 9)
+    ] + [
+        AssignmentItem(target_id=target_id, supervisor_id=30, occurrence_id=100 + target_id)
+        for target_id in range(9, 11)
+    ]
+    request = SolveAssignmentsRequest(
+        request_id="supervisor-minimum-load",
+        input_revision=1,
+        input_hash="supervisor-minimum-load",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(),
+        targets=targets,
+        supervisors=supervisors,
+        occurrences=occurrences,
+        previous_auto_assignments=previous_assignments,
+    )
+
+    result = CpSatScheduleSolver().solve(request)
+    assignment_counts = {
+        supervisor.id: sum(item.supervisor_id == supervisor.id for item in result.assignments)
+        for supervisor in supervisors
+    }
+
+    assert result.coverage_status == "FULL"
+    assert min(assignment_counts.values()) >= len(targets) // len(supervisors)
+    assert max(assignment_counts.values()) <= (len(targets) + len(supervisors) - 1) // len(supervisors)

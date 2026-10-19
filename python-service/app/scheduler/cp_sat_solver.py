@@ -28,6 +28,12 @@ class CpSatScheduleSolver:
             "optimality_proven": False,
             "wall_time_ms": 0
         }
+        target_count = len(req.targets)
+        supervisor_count = len(req.supervisors)
+        minimum_supervisor_load = target_count // supervisor_count if supervisor_count else 0
+        maximum_supervisor_load = (target_count + supervisor_count - 1) // supervisor_count if supervisor_count else 0
+        diagnostics["balanced_minimum_per_supervisor"] = minimum_supervisor_load
+        diagnostics["balanced_maximum_per_supervisor"] = maximum_supervisor_load
 
         # 1. Index supervisors and their daily teaching counts
         supervisor_map = {s.id: s for s in req.supervisors}
@@ -275,6 +281,7 @@ class CpSatScheduleSolver:
         # Max load variable across supervisors
         max_load = model.NewIntVar(0, len(req.targets), "max_load")
         used_supervisor_vars = []
+        quota_shortfall_vars = []
         for s_id, c_list in sup_candidates.items():
             if c_list:
                 supervisor_load = sum(var_x[c] for c in c_list)
@@ -285,16 +292,28 @@ class CpSatScheduleSolver:
                 model.Add(supervisor_load <= len(c_list) * used_supervisor)
                 used_supervisor_vars.append(used_supervisor)
 
-        # Coverage and offline observations remain higher priorities than distribution.
-        target_count = len(req.targets)
-        supervisor_count = len(req.supervisors)
+                if minimum_supervisor_load > 0:
+                    quota_shortfall = model.NewIntVar(
+                        0,
+                        minimum_supervisor_load,
+                        f"quota_shortfall_{s_id}",
+                    )
+                    model.Add(quota_shortfall >= minimum_supervisor_load - supervisor_load)
+                    quota_shortfall_vars.append(quota_shortfall)
+
+        # Coverage comes first, then the minimum load, offline preference, and stability.
         lower_priority_range = 110 * target_count
         supervisor_use_weight = lower_priority_range + 1
         supervisor_use_range = supervisor_use_weight * supervisor_count
         offline_weight = supervisor_use_range + lower_priority_range + 1
-        coverage_weight = offline_weight * target_count + supervisor_use_range + lower_priority_range + 1
+        offline_range = offline_weight * target_count
+        quota_shortfall_weight = offline_range + supervisor_use_range + lower_priority_range + 1
+        maximum_quota_shortfall = minimum_supervisor_load * len(quota_shortfall_vars)
+        quota_shortfall_range = quota_shortfall_weight * maximum_quota_shortfall
+        coverage_weight = quota_shortfall_range + offline_range + supervisor_use_range + lower_priority_range + 1
         model.Maximize(
             coverage_weight * total_coverage
+            - quota_shortfall_weight * sum(quota_shortfall_vars)
             + offline_weight * offline_bonus
             + supervisor_use_weight * sum(used_supervisor_vars)
             + 10 * stability_bonus
@@ -330,6 +349,18 @@ class CpSatScheduleSolver:
                 for supervisor_id, supervisor_candidates in sup_candidates.items()
                 if supervisor_candidates and supervisor_id not in assigned_supervisor_ids
             )
+            assignment_counts = {
+                supervisor.id: sum(item.supervisor_id == supervisor.id for item in assigned_items)
+                for supervisor in req.supervisors
+            }
+            diagnostics["assignments_per_supervisor"] = {
+                str(supervisor_id): count
+                for supervisor_id, count in assignment_counts.items()
+            }
+            diagnostics["supervisor_quota_shortfalls"] = {
+                str(supervisor_id): max(0, minimum_supervisor_load - count)
+                for supervisor_id, count in assignment_counts.items()
+            }
 
             solver_status_str = "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE"
             coverage_str = "FULL" if len(assigned_items) == len(req.targets) else ("PARTIAL" if assigned_items else "NONE")
