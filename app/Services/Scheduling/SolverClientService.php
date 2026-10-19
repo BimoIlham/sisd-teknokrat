@@ -129,10 +129,22 @@ class SolverClientService
             ])->toArray(),
         ];
 
+        $solverPayloadHash = $this->snapshots->hash($payload);
+        $inputSnapshot = [
+            'sources' => $sources,
+            'solver' => [
+                'payload_hash' => $solverPayloadHash,
+                'target_count' => count($pool['targets']),
+                'supervisor_count' => count($pool['supervisors']),
+                'candidate_count' => count($pool['candidates']),
+                'locked_assignment_count' => $lockedAssignments->count(),
+            ],
+        ];
+
         $run->fill([
             'input_revision' => $revision,
-            'input_payload' => ['sources' => $sources, 'solver' => $payload],
-            'input_hash' => $this->snapshots->hash(['sources' => $sources, 'solver' => $payload]),
+            'input_payload' => $inputSnapshot,
+            'input_hash' => $this->snapshots->hash($inputSnapshot),
         ]);
         DB::transaction(function () use ($run, $revision): void {
             if ($this->locks->state()->revision !== $revision) {

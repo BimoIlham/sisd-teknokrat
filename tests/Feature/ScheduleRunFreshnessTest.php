@@ -51,7 +51,8 @@ class ScheduleRunFreshnessTest extends TestCase
         $this->assertSame(10, $run->input_revision);
         $this->assertSame(10, $run->fresh()->input_revision);
         $this->assertNotEmpty($run->input_payload['sources']['occurrences']);
-        $this->assertNotEmpty($run->input_payload['solver']['candidates']);
+        $this->assertGreaterThan(0, $run->input_payload['solver']['candidate_count']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $run->input_payload['solver']['payload_hash']);
         $this->assertSame(app(SchedulingInputSnapshot::class)->hash($run->fresh()->input_payload), $run->input_hash);
         $this->assertSame('OPTIMAL', $run->status);
     }
