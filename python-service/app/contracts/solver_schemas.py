@@ -42,6 +42,7 @@ class TeachingOccurrence(BaseModel):
     study_program_id: Optional[int] = None
     course_name: str = Field(max_length=255)
     class_name: str = Field(max_length=255)
+    allowed_supervisor_ids: Optional[List[int]] = None
 
 class TeachingBusyInterval(BaseModel):
     supervisor_id: int

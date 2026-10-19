@@ -59,11 +59,14 @@ class CandidateBuilder
 
         // Occurrences within stage date range for target lecturers
         $occurrences = TeachingOccurrence::whereHas('teachingSchedule', function ($q) use ($targetLecturerIds, $period) {
-            $q->whereIn('lecturer_id', $targetLecturerIds)->where('supervision_period_id', $period->id)->where('is_active', true);
+            $q->whereIn('lecturer_id', $targetLecturerIds)
+                ->where('supervision_period_id', $period->id)
+                ->where('academic_term_id', $period->academic_term_id)
+                ->where('is_active', true);
         })
             ->where('status', 'SCHEDULED')
             ->whereBetween('occurs_on', [$stage->start_date, $stage->end_date])
-            ->with('teachingSchedule')
+            ->with('teachingSchedule.course:id,name')
             ->orderBy('id')->get();
 
         $this->conflictChecker->primeForCandidates(
@@ -74,6 +77,7 @@ class CandidateBuilder
 
         // Filter valid candidates for each target occurrence and supervisor
         $candidates = [];
+        $solverOccurrences = [];
 
         foreach ($occurrences as $occ) {
             $schedule = $occ->teachingSchedule;
@@ -87,6 +91,20 @@ class CandidateBuilder
             if ($pairedAssignment && (! $pairedOccurrence || ! $occ->hasSameSupervisionSlotAs($pairedOccurrence))) {
                 continue;
             }
+
+            $solverOccurrences[] = [
+                'id' => (int) $occ->id,
+                'target_id' => (int) $targetId,
+                'occurs_on' => $date,
+                'starts_at' => $occ->starts_at->toIso8601String(),
+                'ends_at' => $occ->ends_at->toIso8601String(),
+                'delivery_mode' => strtoupper((string) $schedule->delivery_mode),
+                'faculty_id' => $schedule->faculty_id ? (int) $schedule->faculty_id : null,
+                'study_program_id' => $schedule->study_program_id ? (int) $schedule->study_program_id : null,
+                'course_name' => (string) ($schedule->course?->name ?? ''),
+                'class_name' => (string) ($schedule->class_name ?? ''),
+                'schedule_identity' => $schedule->supervisionIdentity(),
+            ];
 
             $pairedSupervisorId = $pairedAssignment?->supervisor_lecturer_id;
             $eligibleSupervisors = $pairedSupervisorId
@@ -117,6 +135,18 @@ class CandidateBuilder
             }
         }
 
+        $allowedSupervisorsByOccurrence = [];
+        foreach ($candidates as $candidate) {
+            $allowedSupervisorsByOccurrence[$candidate['occurrence_id']][$candidate['supervisor_lecturer_id']] = true;
+        }
+        foreach ($solverOccurrences as &$solverOccurrence) {
+            $solverOccurrence['allowed_supervisor_ids'] = array_map(
+                'intval',
+                array_keys($allowedSupervisorsByOccurrence[$solverOccurrence['id']] ?? [])
+            );
+        }
+        unset($solverOccurrence);
+
         return [
             'stage' => [
                 'id' => $stage->id,
@@ -129,13 +159,18 @@ class CandidateBuilder
                 'lecturer_id' => $t->lecturer_id,
                 'name' => $t->lecturer->name,
                 'nidn' => $t->lecturer->nidn,
+                'faculty_id' => $t->lecturer->faculty_id ? (int) $t->lecturer->faculty_id : null,
+                'study_program_id' => $t->lecturer->study_program_id ? (int) $t->lecturer->study_program_id : null,
             ])->values()->toArray(),
             'supervisors' => $supervisors->map(fn ($s) => [
                 'lecturer_id' => $s->lecturer_id,
                 'name' => $s->lecturer->name,
                 'target_quota' => $s->target_quota,
+                'faculty_id' => $s->lecturer->faculty_id ? (int) $s->lecturer->faculty_id : null,
+                'study_program_id' => $s->lecturer->study_program_id ? (int) $s->lecturer->study_program_id : null,
             ])->values()->toArray(),
             'candidates' => $candidates,
+            'occurrences' => $solverOccurrences,
         ];
     }
 }

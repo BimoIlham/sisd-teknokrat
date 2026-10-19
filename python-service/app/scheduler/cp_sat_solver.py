@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 from ortools.sat.python import cp_model
 from app.contracts.solver_schemas import (
@@ -121,6 +121,8 @@ class CpSatScheduleSolver:
 
                 for sup in req.supervisors:
                     s_id = sup.id
+                    if occ.allowed_supervisor_ids is not None and s_id not in occ.allowed_supervisor_ids:
+                        continue
                     # H01: No self-supervision
                     if s_id == t_id:
                         continue
@@ -212,20 +214,23 @@ class CpSatScheduleSolver:
             sup_candidates[cand[1]].append(cand)
 
         for s_id, c_list in sup_candidates.items():
-            for i in range(len(c_list)):
-                cand_a = c_list[i]
-                occ_a = occ_map[cand_a[2]]
-                dt_a_start = parse_iso_dt(occ_a.starts_at)
-                dt_a_end = parse_iso_dt(occ_a.ends_at)
-
-                for j in range(i + 1, len(c_list)):
-                    cand_b = c_list[j]
-                    occ_b = occ_map[cand_b[2]]
-                    dt_b_start = parse_iso_dt(occ_b.starts_at)
-                    dt_b_end = parse_iso_dt(occ_b.ends_at)
-
-                    if intervals_overlap(dt_a_start, dt_a_end, dt_b_start, dt_b_end, buffer_minutes):
-                        model.Add(var_x[cand_a] + var_x[cand_b] <= 1)
+            starts_and_ends = [
+                (
+                    candidate,
+                    parse_iso_dt(occ_map[candidate[2]].starts_at),
+                    parse_iso_dt(occ_map[candidate[2]].ends_at),
+                )
+                for candidate in c_list
+            ]
+            starts_and_ends.sort(key=lambda interval: interval[1])
+            for index, (candidate_a, start_a, end_a) in enumerate(starts_and_ends):
+                latest_conflict_start = end_a + timedelta(minutes=buffer_minutes)
+                for next_index in range(index + 1, len(starts_and_ends)):
+                    candidate_b, start_b, end_b = starts_and_ends[next_index]
+                    if start_b >= latest_conflict_start:
+                        break
+                    if intervals_overlap(start_a, end_a, start_b, end_b, buffer_minutes):
+                        model.Add(var_x[candidate_a] + var_x[candidate_b] <= 1)
 
         # Policy constraints: max_supervisions_per_day, max_supervisions_per_week
         if req.rules.max_supervisions_per_day is not None:

@@ -8,6 +8,7 @@ use App\Models\SupervisionStage;
 use App\Models\TeachingOccurrence;
 use App\Models\User;
 use App\Services\PythonServiceConnection;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,8 @@ class SolverClientService
         protected CandidateBuilder $candidateBuilder,
         protected ConflictChecker $conflictChecker,
         protected SchedulingInputSnapshot $snapshots,
-        protected SchedulingLockService $locks
+        protected SchedulingLockService $locks,
+        protected PythonSolverPayloadBuilder $pythonPayloadBuilder
     ) {}
 
     /**
@@ -115,21 +117,16 @@ class SolverClientService
             ->with('teachingOccurrence.teachingSchedule')
             ->orderBy('id')->get();
 
-        $payload = [
-            'stage_id' => $stage->id,
-            'timeout_seconds' => $timeoutSeconds,
-            'targets' => $pool['targets'],
-            'supervisors' => $pool['supervisors'],
-            'candidates' => $pool['candidates'],
-            'locked_assignments' => $lockedAssignments->map(fn ($a) => [
-                'target_lecturer_id' => $a->target_lecturer_id,
-                'supervisor_lecturer_id' => $a->supervisor_lecturer_id,
-                'occurrence_id' => $a->teaching_occurrence_id,
-                'schedule_identity' => $a->teachingOccurrence?->teachingSchedule?->supervisionIdentity(),
-            ])->toArray(),
-        ];
-
+        $payload = $this->pythonPayloadBuilder->build(
+            $stage,
+            $pool,
+            $lockedAssignments,
+            $revision,
+            $timeoutSeconds,
+            $run->request_id
+        );
         $solverPayloadHash = $this->snapshots->hash($payload);
+        $payload['input_hash'] = $solverPayloadHash;
         $inputSnapshot = [
             'sources' => $sources,
             'solver' => [
@@ -172,12 +169,56 @@ class SolverClientService
 
             if ($response->successful()) {
                 $data = $response->json();
-                $run->status = $data['status']; // OPTIMAL, FEASIBLE, INFEASIBLE
-                $run->execution_duration_ms = $data['duration_ms'] ?? 0;
-                $run->diagnostics_json = $data['diagnostics'] ?? [];
-                $run->proposed_assignments = $data['assignments'] ?? [];
-                $run->target_coverage_rate = $data['coverage_rate'] ?? 0.0;
+                if (isset($data['solver_status'])) {
+                    if (($data['request_id'] ?? null) !== $run->request_id
+                        || (int) ($data['input_revision'] ?? -1) !== $revision
+                        || ! is_string($data['input_hash'] ?? null)
+                        || ! hash_equals($solverPayloadHash, $data['input_hash'])) {
+                        throw new \RuntimeException('Service solver mengembalikan hasil untuk input yang berbeda.');
+                    }
+
+                    $run->status = $data['solver_status'];
+                    $run->solver_status = $data['solver_status'];
+                    $run->coverage_status = $data['coverage_status'] ?? 'NONE';
+                    $run->execution_duration_ms = $data['diagnostics']['wall_time_ms'] ?? 0;
+                    $run->diagnostics_json = array_merge($data['diagnostics'] ?? [], [
+                        'unassigned' => $data['unassigned'] ?? [],
+                    ]);
+                    $run->proposed_assignments = $this->mapPythonAssignments(
+                        $data['assignments'] ?? [],
+                        $pool,
+                        $lockedAssignments,
+                        $payload['timezone']
+                    );
+                    $assignedTargetCount = collect($data['assignments'] ?? [])
+                        ->pluck('target_id')->unique()->count();
+                    $targetCount = count($pool['targets']);
+                    $run->target_coverage_rate = $targetCount > 0
+                        ? round(($assignedTargetCount / $targetCount) * 100, 2)
+                        : 0.0;
+                } else {
+                    $run->status = $data['status'];
+                    $run->solver_status = $data['status'];
+                    $run->execution_duration_ms = $data['duration_ms'] ?? 0;
+                    $run->diagnostics_json = $data['diagnostics'] ?? [];
+                    $run->proposed_assignments = $data['assignments'] ?? [];
+                    $run->target_coverage_rate = $data['coverage_rate'] ?? 0.0;
+                }
                 $solvedExternally = true;
+            } elseif ($response->status() === 422) {
+                Log::error('Python solver rejected the scheduling request', [
+                    'run_id' => $run->id,
+                    'status' => $response->status(),
+                    'response' => $response->json(),
+                ]);
+                throw ValidationException::withMessages([
+                    'solver' => 'Service solver menolak data penjadwalan. Periksa log aplikasi sebelum mencoba kembali.',
+                ]);
+            } elseif ($response->failed()) {
+                Log::warning('Python solver request failed; using internal constraint engine', [
+                    'run_id' => $run->id,
+                    'status' => $response->status(),
+                ]);
             }
         } catch (ConnectionException $e) {
             Log::info('Python solver unavailable; using internal constraint engine', ['exception_class' => $e::class]);
@@ -194,6 +235,10 @@ class SolverClientService
             // Internal deterministic constraint scheduler
             $internalResult = $this->solveInternally($pool, $lockedAssignments);
             $run->status = $internalResult['status'];
+            $run->solver_status = $internalResult['status'];
+            $run->coverage_status = $internalResult['coverage_rate'] >= 100
+                ? 'FULL'
+                : ($internalResult['coverage_rate'] > 0 ? 'PARTIAL' : 'NONE');
             $run->execution_duration_ms = $internalResult['duration_ms'];
             $run->diagnostics_json = $internalResult['diagnostics'];
             $run->proposed_assignments = $internalResult['assignments'];
@@ -214,6 +259,75 @@ class SolverClientService
         }, 3);
 
         return $run;
+    }
+
+    /**
+     * Convert the compact Python response back to the assignment shape used by the Laravel UI.
+     *
+     * @param  array<int, array<string, int>>  $assignments
+     * @param  array<string, mixed>  $pool
+     * @param  Collection<int, SupervisionAssignment>  $lockedAssignments
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapPythonAssignments(
+        array $assignments,
+        array $pool,
+        Collection $lockedAssignments,
+        string $timezone
+    ): array {
+        $occurrences = collect($pool['occurrences'])->keyBy('id');
+        $lockedByTarget = $lockedAssignments->keyBy('target_lecturer_id');
+        $selectedKeys = collect($assignments)->mapWithKeys(fn (array $assignment): array => [
+            $assignment['target_id'].':'.$assignment['supervisor_id'].':'.$assignment['occurrence_id'] => true,
+        ]);
+        $candidateDetails = [];
+        foreach ($pool['candidates'] as $candidate) {
+            $key = $candidate['target_lecturer_id'].':'.$candidate['supervisor_lecturer_id'].':'.$candidate['occurrence_id'];
+            if ($selectedKeys->has($key)) {
+                $candidateDetails[$key] = $candidate;
+            }
+        }
+
+        $mapped = [];
+        $assignedTargetIds = [];
+        foreach ($assignments as $assignment) {
+            $targetId = (int) $assignment['target_id'];
+            $supervisorId = (int) $assignment['supervisor_id'];
+            $occurrenceId = (int) $assignment['occurrence_id'];
+            if (isset($assignedTargetIds[$targetId])) {
+                throw new \RuntimeException('Service solver mengembalikan lebih dari satu kelas untuk satu dosen target.');
+            }
+            $assignedTargetIds[$targetId] = true;
+            $occurrence = $occurrences->get($occurrenceId);
+            if (! $occurrence || (int) $occurrence['target_id'] !== $targetId) {
+                throw new \RuntimeException('Service solver mengembalikan kelas yang tidak sesuai dengan dosen target.');
+            }
+
+            $key = $targetId.':'.$supervisorId.':'.$occurrenceId;
+            $candidate = $candidateDetails[$key] ?? null;
+            $locked = $lockedByTarget->get($targetId);
+            if ($locked && ((int) $locked->supervisor_lecturer_id !== $supervisorId
+                || (int) $locked->teaching_occurrence_id !== $occurrenceId)) {
+                throw new \RuntimeException('Service solver mengubah penugasan yang terkunci.');
+            }
+            if (! $candidate && ! $locked) {
+                throw new \RuntimeException('Service solver mengembalikan kombinasi penugasan yang tidak valid.');
+            }
+
+            $mapped[] = [
+                'target_lecturer_id' => $targetId,
+                'supervisor_lecturer_id' => $supervisorId,
+                'occurrence_id' => $occurrenceId,
+                'assignment_type' => $locked?->assignment_type ?? 'AUTO',
+                'schedule_identity' => $candidate['schedule_identity'] ?? $occurrence['schedule_identity'] ?? null,
+                'date' => $occurrence['occurs_on'],
+                'start_time' => CarbonImmutable::parse($occurrence['starts_at'])->timezone($timezone)->format('H:i'),
+                'end_time' => CarbonImmutable::parse($occurrence['ends_at'])->timezone($timezone)->format('H:i'),
+                'delivery_mode' => $occurrence['delivery_mode'],
+            ];
+        }
+
+        return $mapped;
     }
 
     /**
