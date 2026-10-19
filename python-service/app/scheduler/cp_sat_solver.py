@@ -213,6 +213,16 @@ class CpSatScheduleSolver:
         for cand in candidates:
             sup_candidates[cand[1]].append(cand)
 
+        diagnostics["candidate_count_by_supervisor"] = {
+            str(supervisor_id): len(supervisor_candidates)
+            for supervisor_id, supervisor_candidates in sup_candidates.items()
+        }
+        diagnostics["supervisors_without_candidates"] = sorted(
+            supervisor_id
+            for supervisor_id, supervisor_candidates in sup_candidates.items()
+            if not supervisor_candidates
+        )
+
         for s_id, c_list in sup_candidates.items():
             starts_and_ends = [
                 (
@@ -264,16 +274,32 @@ class CpSatScheduleSolver:
 
         # Max load variable across supervisors
         max_load = model.NewIntVar(0, len(req.targets), "max_load")
+        used_supervisor_vars = []
         for s_id, c_list in sup_candidates.items():
             if c_list:
-                model.Add(sum(var_x[c] for c in c_list) <= max_load)
+                supervisor_load = sum(var_x[c] for c in c_list)
+                model.Add(supervisor_load <= max_load)
 
-        # Coverage dominates mode preference; offline dominates balance and stability.
+                used_supervisor = model.NewBoolVar(f"used_supervisor_{s_id}")
+                model.Add(supervisor_load >= used_supervisor)
+                model.Add(supervisor_load <= len(c_list) * used_supervisor)
+                used_supervisor_vars.append(used_supervisor)
+
+        # Coverage and offline observations remain higher priorities than distribution.
         target_count = len(req.targets)
-        secondary_range = 110 * target_count
-        offline_weight = secondary_range + 1
-        coverage_weight = offline_weight * target_count + secondary_range + 1
-        model.Maximize(coverage_weight * total_coverage + offline_weight * offline_bonus + 10 * stability_bonus - 100 * max_load)
+        supervisor_count = len(req.supervisors)
+        lower_priority_range = 110 * target_count
+        supervisor_use_weight = lower_priority_range + 1
+        supervisor_use_range = supervisor_use_weight * supervisor_count
+        offline_weight = supervisor_use_range + lower_priority_range + 1
+        coverage_weight = offline_weight * target_count + supervisor_use_range + lower_priority_range + 1
+        model.Maximize(
+            coverage_weight * total_coverage
+            + offline_weight * offline_bonus
+            + supervisor_use_weight * sum(used_supervisor_vars)
+            + 10 * stability_bonus
+            - 100 * max_load
+        )
 
         # Solve
         solver = cp_model.CpSolver()
@@ -297,6 +323,13 @@ class CpSatScheduleSolver:
 
             diagnostics["optimality_proven"] = (status == cp_model.OPTIMAL)
             diagnostics["assigned_count"] = len(assigned_items)
+            assigned_supervisor_ids = sorted({item.supervisor_id for item in assigned_items})
+            diagnostics["assigned_supervisor_ids"] = assigned_supervisor_ids
+            diagnostics["eligible_but_unused_supervisor_ids"] = sorted(
+                supervisor_id
+                for supervisor_id, supervisor_candidates in sup_candidates.items()
+                if supervisor_candidates and supervisor_id not in assigned_supervisor_ids
+            )
 
             solver_status_str = "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE"
             coverage_str = "FULL" if len(assigned_items) == len(req.targets) else ("PARTIAL" if assigned_items else "NONE")

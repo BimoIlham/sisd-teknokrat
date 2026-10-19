@@ -41,6 +41,8 @@ def test_hard_constraint_h01_no_self_supervision():
     assert res.coverage_status == "NONE"
     assert res.unassigned[0].target_id == 1
     assert "NO_FREE_SUPERVISOR" in res.unassigned[0].reason_codes
+    assert res.diagnostics["candidate_count_by_supervisor"] == {"1": 0}
+    assert res.diagnostics["supervisors_without_candidates"] == [1]
 
 def test_hard_constraint_h03_teaching_overlap():
     solver = CpSatScheduleSolver()
@@ -202,3 +204,53 @@ def test_explicitly_locked_online_assignment_is_preserved():
     )
     result = CpSatScheduleSolver().solve(request)
     assert result.assignments[0].occurrence_id == 101
+
+
+def test_solver_uses_available_supervisors_before_giving_anyone_an_extra_assignment():
+    request = SolveAssignmentsRequest(
+        request_id="supervisor-coverage",
+        input_revision=1,
+        input_hash="supervisor-coverage",
+        period_id=1,
+        stage_id=1,
+        stage_no=1,
+        date_range=DateRange(starts_on="2026-10-01", ends_on="2026-10-15"),
+        rules=SchedulingRuleConfig(),
+        targets=[TargetLecturer(id=target_id, name=f"Target {target_id}") for target_id in range(1, 5)],
+        supervisors=[
+            SupervisorLecturer(id=10, name="Supervisor 10"),
+            SupervisorLecturer(id=20, name="Supervisor 20"),
+            SupervisorLecturer(id=30, name="Supervisor 30"),
+        ],
+        occurrences=[
+            TeachingOccurrence(
+                id=101,
+                target_id=1,
+                occurs_on="2026-10-05",
+                starts_at="2026-10-05T01:00:00Z",
+                ends_at="2026-10-05T02:40:00Z",
+                course_name="Course 1",
+                class_name="Class 1",
+                allowed_supervisor_ids=[10, 20, 30],
+            ),
+            *[
+                TeachingOccurrence(
+                    id=100 + target_id,
+                    target_id=target_id,
+                    occurs_on=f"2026-10-{target_id + 5:02d}",
+                    starts_at=f"2026-10-{target_id + 5:02d}T01:00:00Z",
+                    ends_at=f"2026-10-{target_id + 5:02d}T02:40:00Z",
+                    course_name=f"Course {target_id}",
+                    class_name=f"Class {target_id}",
+                    allowed_supervisor_ids=[10, 20],
+                )
+                for target_id in range(2, 5)
+            ],
+        ],
+    )
+
+    result = CpSatScheduleSolver().solve(request)
+
+    assert result.coverage_status == "FULL"
+    assert {assignment.supervisor_id for assignment in result.assignments} == {10, 20, 30}
+    assert result.diagnostics["eligible_but_unused_supervisor_ids"] == []
