@@ -4,8 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\FormTemplate;
 use App\Models\Question;
+use App\Models\Supervision;
 use App\Services\InstrumentEditService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -56,6 +58,9 @@ class RepairYesNoQuestionOptions extends Command
             })->all());
 
         if (! $this->option('apply')) {
+            if ($questionId !== null) {
+                $this->showAnswerHistory($questions->first());
+            }
             $this->info('Pratinjau saja. Gunakan --question=ID --apply untuk memperbaiki satu pertanyaan.');
 
             return self::SUCCESS;
@@ -84,5 +89,27 @@ class RepairYesNoQuestionOptions extends Command
         $this->info('Pilihan pertanyaan '.$questionId.' berhasil diperbaiki menjadi Ya/Tidak.');
 
         return self::SUCCESS;
+    }
+
+    private function showAnswerHistory(Question $question): void
+    {
+        $draftCount = Supervision::where('form_template_id', $question->form_template_id)->where('status', 'DRAFT')->count();
+        $submittedCount = Supervision::where('form_template_id', $question->form_template_id)->where('status', 'SUBMITTED')->count();
+        $filledAnswers = $question->answers()->where(fn (Builder $query): Builder => $query
+            ->whereNotNull('question_option_id')->orWhereNotNull('boolean_value')
+            ->orWhereNotNull('numeric_score')->orWhere('text_value', '<>', ''));
+        $filledCount = (clone $filledAnswers)->count();
+        $draftAnswerCount = (clone $filledAnswers)->whereHas('supervision', fn (Builder $query): Builder => $query->where('status', 'DRAFT'))->count();
+        $submittedAnswerCount = (clone $filledAnswers)->whereHas('supervision', fn (Builder $query): Builder => $query->where('status', 'SUBMITTED'))->count();
+        $emptyCount = $question->answers()->count() - $filledCount;
+
+        $this->line("Instrumen: {$draftCount} draf, {$submittedCount} final.");
+        $this->line("Soal {$question->id}: {$filledCount} jawaban terisi ({$draftAnswerCount} draf, {$submittedAnswerCount} final), {$emptyCount} baris kosong/catatan.");
+
+        $optionCounts = $question->answers()->select('question_option_id')
+            ->selectRaw('COUNT(*) as answer_count')->groupBy('question_option_id')->pluck('answer_count', 'question_option_id');
+        $this->table(['Nilai pilihan', 'Skor', 'Jumlah dipilih'], $question->options->map(fn ($option): array => [
+            $option->value, $option->numeric_score ?? '-', $optionCounts->get($option->id, 0),
+        ])->all());
     }
 }

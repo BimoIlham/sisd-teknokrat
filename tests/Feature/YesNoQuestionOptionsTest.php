@@ -159,6 +159,42 @@ class YesNoQuestionOptionsTest extends TestCase
         $this->assertSame($before, $question->fresh()->load('options', 'answers')->toArray());
     }
 
+    #[TestWith(['other_question', '0 jawaban terisi (0 draf, 0 final), 0 baris kosong/catatan.'])]
+    #[TestWith(['blank', '0 jawaban terisi (0 draf, 0 final), 1 baris kosong/catatan.'])]
+    #[TestWith(['zero_draft', '1 jawaban terisi (1 draf, 0 final), 0 baris kosong/catatan.'])]
+    #[TestWith(['zero_submitted', '1 jawaban terisi (0 draf, 1 final), 0 baris kosong/catatan.'])]
+    public function test_question_preview_distinguishes_its_answers_from_other_questions_without_writing(string $state, string $expectedSummary): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $supervision->update(['draft_started_at' => now()]);
+        $answeredQuestion = $question;
+        if ($state === 'other_question') {
+            $answeredQuestion = $question->replicate();
+            $answeredQuestion->code = 'OTHER_ANSWERED';
+            $answeredQuestion->sort_order = 2;
+            $answeredQuestion->save();
+        }
+        SupervisionAnswer::create([
+            'supervision_id' => $supervision->id, 'question_id' => $answeredQuestion->id,
+            'numeric_score' => $state === 'blank' ? null : 0,
+            'boolean_value' => $state === 'blank' ? null : false,
+            'notes' => 'Catatan pribadi yang tidak perlu ditampilkan.',
+        ]);
+        if ($state === 'zero_submitted') {
+            $supervision->update(['status' => 'SUBMITTED']);
+        }
+        $before = $question->fresh()->load('options', 'answers')->toArray();
+        $supervisionBefore = $supervision->fresh()->toArray();
+
+        $this->artisan('instruments:repair-yes-no', ['--question' => $question->id])
+            ->expectsOutput("Soal {$question->id}: {$expectedSummary}")
+            ->expectsOutputToContain('Pratinjau saja')->assertSuccessful();
+
+        $this->assertSame($before, $question->fresh()->load('options', 'answers')->toArray());
+        $this->assertSame($supervisionBefore, $supervision->fresh()->toArray());
+    }
+
     private function invalidQuestion(): Question
     {
         $question = $this->instrument->formTemplate->questions()->firstOrFail();
