@@ -62,4 +62,22 @@ class Question extends Model
         return $this->question_type === 'TEXTAREA'
             && ($this->validation_rules['evaluation_notes'] ?? false) === true;
     }
+
+    /**
+     * @return list<array{value: string, label: string, numeric_score: float, sort_order: int}>
+     */
+    public static function defaultYesNoOptions(): array
+    {
+        return [
+            ['value' => 'YES', 'label' => 'Ya, tersedia', 'numeric_score' => 4.0, 'sort_order' => 1],
+            ['value' => 'NO', 'label' => 'Tidak tersedia', 'numeric_score' => 0.0, 'sort_order' => 2],
+        ];
+    }
+
+    public function hasValidYesNoOptions(): bool
+    {
+        return $this->question_type === 'YES_NO'
+            && $this->options->count() === 2
+            && $this->options->pluck('value')->sort()->values()->all() === ['NO', 'YES'];
+    }
 }

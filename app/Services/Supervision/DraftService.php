@@ -119,7 +119,9 @@ class DraftService
                     if ($option) {
                         $answerRow['question_option_id'] = $option->id;
                         $answerRow['numeric_score'] = $option->numeric_score;
-                        $answerRow['boolean_value'] = (bool) $option->numeric_score;
+                        $answerRow['boolean_value'] = in_array($option->value, ['YES', 'NO'], true)
+                            ? $option->value === 'YES'
+                            : (float) $option->numeric_score > 0;
                         $answerRow['text_value'] = $option->option_text;
                     } else {
                         $booleanValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

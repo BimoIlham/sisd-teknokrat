@@ -12,6 +12,7 @@ use App\Services\InstrumentEditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -95,6 +96,10 @@ class InstrumentController extends Controller
             'options.*.label' => 'nullable|string',
             'options.*.numeric_score' => 'nullable|numeric|min:0|max:10',
         ]);
+
+        if ($validated['question_type'] === 'YES_NO') {
+            $validated['options'] = $this->validatedYesNoOptions($validated['options'] ?? null);
+        }
 
         DB::transaction(function () use ($request, $template, $validated) {
             $template = app(InstrumentEditService::class)->lockEditable($template->id);
@@ -245,6 +250,10 @@ class InstrumentController extends Controller
             'options.*.numeric_score' => 'nullable|numeric|min:0|max:10',
         ]);
 
+        if ($validated['question_type'] === 'YES_NO') {
+            $validated['options'] = $this->validatedYesNoOptions($validated['options'] ?? null);
+        }
+
         DB::transaction(function () use ($request, $question, $template, $validated) {
             $template = app(InstrumentEditService::class)->lockEditable($template->id);
             $question->refresh();
@@ -301,7 +310,15 @@ class InstrumentController extends Controller
             // Sync options
             if (in_array($validated['question_type'], ['SCORE', 'YES_NO'], true)) {
                 if (! empty($validated['options']) && is_array($validated['options'])) {
-                    $keepIds = [];
+                    $retainedOptionIds = collect($validated['options'])
+                        ->filter(fn (array $option): bool => ! empty($option['label']))
+                        ->pluck('id')->filter()->all();
+                    foreach ($question->options()->whereNotIn('id', $retainedOptionIds)->get() as $option) {
+                        if (! $option->answers()->exists()) {
+                            $option->delete();
+                        }
+                    }
+
                     $order = 1;
                     foreach ($validated['options'] as $optData) {
                         if (empty($optData['label'])) {
@@ -318,24 +335,14 @@ class InstrumentController extends Controller
                                 'label' => $optData['label'],
                                 'sort_order' => $order++,
                             ]);
-                            $keepIds[] = $existingOption->id;
                         } else {
-                            $created = QuestionOption::create([
+                            QuestionOption::create([
                                 'question_id' => $question->id,
                                 'value' => (string) ($optData['value'] ?? ($order - 1)),
                                 'numeric_score' => isset($optData['numeric_score']) && $optData['numeric_score'] !== '' ? (float) $optData['numeric_score'] : null,
                                 'label' => $optData['label'],
                                 'sort_order' => $order++,
                             ]);
-                            $keepIds[] = $created->id;
-                        }
-                    }
-
-                    // Delete options removed by user if they don't have answers
-                    $removedOptions = $question->options()->whereNotIn('id', $keepIds)->get();
-                    foreach ($removedOptions as $rem) {
-                        if (! $rem->answers()->exists()) {
-                            $rem->delete();
                         }
                     }
                 }
@@ -437,6 +444,27 @@ class InstrumentController extends Controller
         });
 
         return redirect()->back()->with('success', 'Bagian berhasil diperbarui.');
+    }
+
+    /**
+     * @param  array<int, array{id?: int|string|null, value?: string|null, label?: string|null, numeric_score?: int|float|string|null, sort_order?: int}>|null  $options
+     * @return array<int, array{id?: int|string|null, value: string, label: string, numeric_score?: int|float|string|null, sort_order?: int}>
+     */
+    private function validatedYesNoOptions(?array $options): array
+    {
+        $options ??= Question::defaultYesNoOptions();
+
+        Validator::make(['options' => $options], [
+            'options' => ['required', 'array', 'size:2'],
+            'options.*.value' => ['required', Rule::in(['YES', 'NO']), 'distinct'],
+            'options.*.label' => ['required', 'string'],
+        ], [
+            'options.size' => 'Pertanyaan Ya/Tidak harus memiliki tepat dua pilihan: Ya dan Tidak.',
+            'options.*.value.in' => 'Nilai pilihan Ya/Tidak harus YES atau NO.',
+            'options.*.value.distinct' => 'Pilihan Ya dan Tidak tidak boleh sama.',
+        ])->validate();
+
+        return $options;
     }
 
     public function destroySection(FormSection $section): RedirectResponse

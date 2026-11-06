@@ -626,7 +626,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-100">
                             <div>
                                 <label class="block font-semibold text-slate-700 mb-1.5">Tipe Pertanyaan <span class="text-red-500">*</span></label>
-                                <select name="question_type" x-model="editData.question_type" required class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 p-3 font-medium focus:ring-2 focus:ring-[#7B1113]/20 focus:border-[#7B1113]">
+                                <select name="question_type" x-model="editData.question_type" @change="onTypeChange(editData)" required class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 p-3 font-medium focus:ring-2 focus:ring-[#7B1113]/20 focus:border-[#7B1113]">
                                     <option value="SCORE">Skala Nilai 0 - 4 (Penilaian Mutu)</option>
                                     <option value="YES_NO">Pilihan Ya / Tidak</option>
                                     <option value="TEXTAREA">Catatan Teks / Esai</option>
@@ -1097,24 +1097,24 @@ function questionBankApp() {
             this.toggleBodyScroll();
         },
 
-        onTypeChange() {
-            if (this.formData.question_type === 'SCORE') {
-                this.formData.is_scored = true;
-                this.resetToDefaultScale();
-            } else if (this.formData.question_type === 'YES_NO') {
-                this.formData.is_scored = false;
-                this.formData.options = [
+        onTypeChange(data = this.formData) {
+            if (data.question_type === 'SCORE') {
+                data.is_scored = true;
+                this.resetToDefaultScale(data);
+            } else if (data.question_type === 'YES_NO') {
+                data.is_scored = false;
+                data.options = [
                     { value: 'YES', label: 'Ya, tersedia', numeric_score: 4.0 },
                     { value: 'NO', label: 'Tidak tersedia', numeric_score: 0.0 }
                 ];
             } else {
-                this.formData.is_scored = false;
-                this.formData.options = [];
+                data.is_scored = false;
+                data.options = [];
             }
         },
 
-        resetToDefaultScale() {
-            this.formData.options = [
+        resetToDefaultScale(data = this.formData) {
+            data.options = [
                 { value: '0', label: 'Sangat Kurang / Tidak Dilakukan', numeric_score: 0.0 },
                 { value: '1', label: 'Kurang Memenuhi', numeric_score: 1.0 },
                 { value: '2', label: 'Cukup Memenuhi', numeric_score: 2.0 },
@@ -1148,6 +1148,13 @@ function questionBankApp() {
                 sort_order: q.sort_order,
                 options: q.options ? JSON.parse(JSON.stringify(q.options)) : []
             };
+            if (this.editData.question_type === 'YES_NO'
+                && (this.editData.options.length !== 2
+                    || this.editData.options.map(option => option.value).sort().join(',') !== 'NO,YES')) {
+                const isScored = this.editData.is_scored;
+                this.onTypeChange(this.editData);
+                this.editData.is_scored = isScored;
+            }
             this.editModalOpen = true;
             this.toggleBodyScroll();
         },
