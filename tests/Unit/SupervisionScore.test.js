@@ -57,3 +57,12 @@ test('yes/no options and legacy boolean answers preserve false as a zero score',
 test('fractional scores use the same six-decimal precision as the server', () => {
     assert.equal(calculateSupervisionScore({ 1: 12, 2: 21, 3: 32 }, questions, 'MEAN_0_4').finalScore, 2.333333);
 });
+
+test('default yes/no choices score correctly using their text values', () => {
+    const defaultQuestions = [{ id: 182, type: 'YES_NO', options: [{ id: 'YES', score: 4 }, { id: 'NO', score: 0 }] }];
+    for (const [value, expectedScore] of [['YES', 4], ['NO', 0]]) {
+        const score = calculateSupervisionScore({ 182: value }, defaultQuestions, 'MEAN_0_4');
+        assert.equal(score.finalScore, expectedScore);
+        assert.equal(score.answeredCount, 1);
+    }
+});

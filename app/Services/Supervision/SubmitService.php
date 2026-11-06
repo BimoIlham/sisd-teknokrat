@@ -196,6 +196,11 @@ class SubmitService
                         $answersMap[$question->id] = $answer->selected_option_id;
                     }
                 } elseif ($question->question_type === 'YES_NO') {
+                    if ($question->usesDefaultYesNoOptions() && $answer->selected_option_id !== null) {
+                        $unanswered[] = "Pilih ulang Ya atau Tidak untuk pertanyaan: {$question->question_text}";
+
+                        continue;
+                    }
                     $hasAnswer = $answer->boolean_value !== null || $answer->selected_option_id !== null;
                     if ($hasAnswer) {
                         $answersMap[$question->id] = $answer->selected_option_id ?? $answer->boolean_value;

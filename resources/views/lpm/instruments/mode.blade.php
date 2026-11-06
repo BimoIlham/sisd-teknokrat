@@ -361,19 +361,19 @@
                             </div>
 
                             <!-- Options Badges Display -->
-                            @if($q->options->count() > 0)
+                            @if($q->answerChoices()->isNotEmpty())
                                 <div class="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
                                     <span class="text-xs font-medium text-slate-400 mr-1 flex items-center gap-1.5">
                                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         Pilihan respon:
                                     </span>
-                                    @foreach($q->options as $opt)
+                                    @foreach($q->answerChoices() as $opt)
                                         @php
-                                            $cleanOptLabel = preg_replace('/^[0-9]\s*[-–:]\s*/', '', $opt->label);
+                                            $cleanOptLabel = preg_replace('/^[0-9]\s*[-–:]\s*/', '', $opt['label']);
                                         @endphp
                                         <span class="inline-flex items-center gap-2 px-3 py-1 rounded-xl text-xs bg-slate-50/90 border border-slate-200/80 text-slate-700 shadow-2xs hover:bg-slate-100/80 transition-colors">
-                                            @if(is_numeric($opt->value))
-                                                <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">{{ $opt->value }}</span>
+                                            @if(is_numeric($opt['value']))
+                                                <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">{{ $opt['value'] }}</span>
                                             @endif
                                             <span class="font-medium">{{ $cleanOptLabel }}</span>
                                         </span>

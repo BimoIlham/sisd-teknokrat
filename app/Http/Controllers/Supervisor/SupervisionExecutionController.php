@@ -126,6 +126,14 @@ class SupervisionExecutionController extends Controller
             if ($question->usesStructuredEvaluation()) {
                 $existingAnswersPayload->put($question->id, EvaluationNotes::normalize($existingAnswers->get($question->id)?->evaluation_notes ?? []));
             }
+            if ($question->usesDefaultYesNoOptions()) {
+                $answer = $existingAnswers->get($question->id);
+                if ($answer?->selected_option_id === null && $answer?->boolean_value !== null) {
+                    $existingAnswersPayload->put($question->id, $answer->boolean_value ? 'YES' : 'NO');
+                } else {
+                    $existingAnswersPayload->forget($question->id);
+                }
+            }
         }
         $evidencePayload = $supervision->evidence->map(fn ($evidence) => [
             'id' => $evidence->id,
@@ -142,9 +150,9 @@ class SupervisionExecutionController extends Controller
             ->map(fn ($question) => [
                 'id' => $question->id,
                 'type' => $question->question_type,
-                'options' => $question->options->map(fn ($option) => [
-                    'id' => $option->id,
-                    'score' => $option->numeric_score !== null ? (float) $option->numeric_score : null,
+                'options' => $question->answerChoices()->map(fn (array $option): array => [
+                    'id' => $option['answer_value'],
+                    'score' => $option['numeric_score'],
                 ])->values(),
             ])->values();
 

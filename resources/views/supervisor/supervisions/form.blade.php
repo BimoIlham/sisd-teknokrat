@@ -340,17 +340,20 @@
                                         @endforeach
                                     </div>
                                 @elseif($question->question_type === 'YES_NO')
+                                    @if($question->usesDefaultYesNoOptions() && $supervision->answers->firstWhere('question_id', $question->id)?->selected_option_id !== null)
+                                        <p class="mt-2 text-xs text-amber-800">Jawaban sebelumnya menggunakan skala. Pilih ulang Ya atau Tidak sebelum mengirim penilaian.</p>
+                                    @endif
                                     <div class="flex items-center gap-4 mt-2">
-                                        @foreach($question->options as $opt)
+                                        @foreach($question->answerChoices() as $opt)
                                             <label class="flex items-center p-2.5 px-4 rounded-xl border border-slate-200 hover:border-rose-400 cursor-pointer transition-colors text-xs"
-                                                   :class="{ 'border-rose-600 bg-rose-50/50 text-rose-900 font-semibold': answers[{{ $question->id }}] == {{ $opt->id }} }">
+                                                   :class="{ 'border-rose-600 bg-rose-50/50 text-rose-900 font-semibold': answers[{{ $question->id }}] == {{ Illuminate\Support\Js::from($opt['answer_value']) }} }">
                                                 <input type="radio" 
                                                        name="answers[{{ $question->id }}]" 
-                                                       value="{{ $opt->id }}" 
+                                                       value="{{ $opt['answer_value'] }}"
                                                        x-model="answers[{{ $question->id }}]"
                                                        @change="triggerAutoSave()"
                                                        class="w-3.5 h-3.5 text-rose-800 focus:ring-rose-700">
-                                                <span class="ml-2 font-medium">{{ $opt->option_text }}</span>
+                                                <span class="ml-2 font-medium">{{ $opt['label'] }}</span>
                                             </label>
                                         @endforeach
                                     </div>

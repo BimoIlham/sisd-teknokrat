@@ -75,6 +75,12 @@ class DraftService
                 };
                 if ($question->question_type === 'SCORE') {
                     $rules = ['nullable', 'integer', Rule::in($question->options->modelKeys())];
+                } elseif ($question->usesDefaultYesNoOptions()) {
+                    $rules = ['nullable', function (string $attribute, mixed $value, \Closure $fail): void {
+                        if (! is_bool($value) && ! in_array($value, ['YES', 'NO'], true)) {
+                            $fail('Pilih Ya atau Tidak. Pilihan skala lama tidak dapat digunakan.');
+                        }
+                    }];
                 }
                 Validator::make(['answers' => [$questionId => $answers[$questionId]]], ['answers.'.$questionId => $rules])->validate();
             }
@@ -113,6 +119,15 @@ class DraftService
                     $answerRow['question_option_id'] = $option?->id;
                     $answerRow['numeric_score'] = $option?->numeric_score;
                     $answerRow['text_value'] = $option?->option_text;
+                } elseif ($hasAnswerValue && $question->usesDefaultYesNoOptions()) {
+                    $booleanValue = is_bool($value) ? $value : match ($value) {
+                        'YES' => true,
+                        'NO' => false,
+                        default => null,
+                    };
+                    $answerRow['boolean_value'] = $booleanValue;
+                    $answerRow['numeric_score'] = $booleanValue !== null ? ($booleanValue ? 4.0 : 0.0) : null;
+                    $answerRow['text_value'] = $booleanValue !== null ? ($booleanValue ? 'Ya' : 'Tidak') : null;
                 } elseif ($hasAnswerValue && $question->question_type === 'YES_NO') {
                     $optionId = is_numeric($value) ? (int) $value : null;
                     $option = $optionId ? $question->options->firstWhere('id', $optionId) : null;

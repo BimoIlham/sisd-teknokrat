@@ -6,7 +6,9 @@ use App\Models\Question;
 use App\Models\Supervision;
 use App\Models\SupervisionAnswer;
 use App\Models\SupervisionAssignment;
+use App\Services\Reporting\SupervisionResultPdfService;
 use App\Services\Supervision\DraftService;
+use App\Services\Supervision\SubmitService;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -193,6 +195,146 @@ class YesNoQuestionOptionsTest extends TestCase
 
         $this->assertSame($before, $question->fresh()->load('options', 'answers')->toArray());
         $this->assertSame($supervisionBefore, $supervision->fresh()->toArray());
+    }
+
+    public function test_used_yes_no_question_displays_two_choices_without_changing_its_legacy_options(): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $supervision->update(['draft_started_at' => now()]);
+        $before = $question->fresh()->load('options')->toArray();
+
+        $this->get(route('lpm.instruments.mode', 'offline'))->assertOk()
+            ->assertSee('Pilihan Ya / Tidak')->assertSee('Ya, tersedia')->assertSee('Tidak tersedia')
+            ->assertDontSee('Skala 2');
+        $response = $this->actingAs($this->supervisorUser)
+            ->get(route('supervisor.supervisions.form', $supervision->assignment));
+        $response->assertOk()->assertSee('Ya, tersedia')->assertSee('Tidak tersedia')
+            ->assertDontSee('Skala 2')
+            ->assertViewHas('scoredQuestionsPayload', fn ($questions): bool => $questions->first()['options']->pluck('id')->all() === ['YES', 'NO']);
+        $document = new DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $inputs = (new DOMXPath($document))->query('//input[@type="radio"][@name="answers['.$question->id.']"]');
+        $this->assertSame(2, $inputs->length);
+        $this->assertSame('YES', $inputs->item(0)->getAttribute('value'));
+        $this->assertSame('NO', $inputs->item(1)->getAttribute('value'));
+        $this->assertStringContainsString("== 'YES'", $inputs->item(0)->parentNode->getAttribute(':class'));
+        $this->assertSame($before, $question->fresh()->load('options')->toArray());
+        $this->assertSame(0, $supervision->answers()->count());
+    }
+
+    #[TestWith(['YES', true, '4.00'])]
+    #[TestWith(['NO', false, '0.00'])]
+    public function test_default_yes_no_choices_save_reload_and_submit_with_the_correct_score(string $value, bool $boolean, string $score): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $optionsBefore = $question->options->toArray();
+        $this->actingAs($this->supervisorUser);
+
+        app(DraftService::class)->saveDraft($supervision, [$question->id => $value], 1);
+        $answer = $supervision->answers()->firstOrFail();
+        $this->assertNull($answer->selected_option_id);
+        $this->assertSame($boolean, $answer->boolean_value);
+        $this->assertSame($score, $answer->numeric_score);
+        $this->get(route('supervisor.supervisions.form', $supervision->assignment))
+            ->assertOk()->assertViewHas('existingAnswersPayload', fn ($answers): bool => $answers->get($question->id) === $value);
+        $preview = app(SubmitService::class)->preview($supervision->fresh());
+        $this->assertSame(1, $preview['n_items']);
+        $this->assertSame((float) $score, $preview['final_score']);
+        $submitted = app(SubmitService::class)->submit($supervision->fresh(), $this->supervisorUser, $supervision->fresh()->row_version);
+        $this->assertSame('SUBMITTED', $submitted->status);
+        $this->assertSame($boolean, $submitted->submission_snapshot['answers'][0]['boolean_value']);
+        $this->assertSame((float) $score, (float) $submitted->final_score);
+        $this->get(route('supervisor.supervisions.show', $submitted))->assertOk()->assertSee($boolean ? 'Ya' : 'Tidak');
+        $this->assertSame($optionsBefore, $question->fresh()->options->toArray());
+    }
+
+    public function test_legacy_draft_answer_is_preserved_until_the_supervisor_selects_yes_or_no(): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $legacyOption = $question->options->firstWhere('value', '2');
+        $answer = SupervisionAnswer::create([
+            'supervision_id' => $supervision->id, 'question_id' => $question->id,
+            'question_option_id' => $legacyOption->id, 'numeric_score' => 2, 'boolean_value' => true,
+            'notes' => 'Catatan pengamatan lama.',
+        ]);
+        $before = $answer->fresh()->toArray();
+        $this->actingAs($this->supervisorUser)
+            ->get(route('supervisor.supervisions.form', $supervision->assignment))
+            ->assertOk()->assertSee('Pilih ulang Ya atau Tidak sebelum mengirim penilaian.')
+            ->assertViewHas('existingAnswersPayload', fn ($answers): bool => ! $answers->has($question->id));
+        $this->assertSame($before, $answer->fresh()->toArray());
+
+        app(DraftService::class)->saveDraft($supervision, [], 1, [$question->id => 'Catatan tetap disimpan.']);
+        $this->assertSame($legacyOption->id, $answer->fresh()->selected_option_id);
+        $this->get(route('supervisor.supervisions.review', $supervision))
+            ->assertRedirect(route('supervisor.supervisions.form', $supervision->assignment))
+            ->assertSessionHasErrors('form');
+        $this->assertSame('DRAFT', $supervision->fresh()->status);
+
+        app(DraftService::class)->saveDraft($supervision->fresh(), [$question->id => 'NO'], $supervision->fresh()->row_version);
+        $this->assertFalse($answer->fresh()->boolean_value);
+        $this->assertSame('0.00', $answer->fresh()->numeric_score);
+        $this->assertSame('Catatan tetap disimpan.', $answer->fresh()->notes);
+        $this->assertSame(0.0, app(SubmitService::class)->preview($supervision->fresh())['final_score']);
+    }
+
+    public function test_default_yes_no_choices_reject_scale_option_ids_and_invalid_values(): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $this->actingAs($this->supervisorUser);
+        foreach ([$question->options->first()->id, $question->options->last()->id, '1', 0, 'skala'] as $value) {
+            $this->postJson(route('supervisor.supervisions.draft', $supervision), [
+                'answers' => [$question->id => $value], 'row_version' => 1,
+            ])->assertUnprocessable()->assertJsonValidationErrors('answers.'.$question->id);
+        }
+        $this->assertSame(0, $supervision->answers()->count());
+        $this->assertSame(1, $supervision->fresh()->row_version);
+    }
+
+    public function test_an_unanswered_yes_no_question_is_not_silently_saved_as_no(): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        $this->actingAs($this->supervisorUser);
+        app(DraftService::class)->saveDraft($supervision, [$question->id => null], 1);
+        $answer = $supervision->answers()->firstOrFail();
+        $this->assertNull($answer->boolean_value);
+        $this->assertNull($answer->numeric_score);
+        $this->assertNull($answer->text_value);
+        $this->get(route('supervisor.supervisions.review', $supervision))
+            ->assertRedirect(route('supervisor.supervisions.form', $supervision->assignment))
+            ->assertSessionHasErrors('form');
+    }
+
+    public function test_final_legacy_answers_scores_and_snapshots_keep_their_original_scale_values(): void
+    {
+        $question = $this->invalidQuestion();
+        $supervision = $this->createSupervision();
+        SupervisionAnswer::create([
+            'supervision_id' => $supervision->id, 'question_id' => $question->id,
+            'question_option_id' => $question->options->firstWhere('value', '2')->id,
+            'numeric_score' => 2, 'boolean_value' => true,
+        ]);
+        $supervision->update([
+            'status' => 'SUBMITTED', 'raw_score' => 2, 'scored_question_count' => 1, 'final_score' => 2,
+            'submission_snapshot' => ['legacy' => 'Original historical snapshot'],
+        ]);
+        $before = $supervision->fresh()->load('answers')->toArray();
+        $optionsBefore = $question->options->toArray();
+        $reportBefore = app(SupervisionResultPdfService::class)->reportData($supervision->fresh());
+
+        $this->get(route('lpm.instruments.mode', 'offline'))->assertOk()->assertSee('Ya, tersedia');
+        $this->actingAs($this->supervisorUser)->get(route('supervisor.supervisions.show', $supervision))
+            ->assertOk()->assertSee('Skala 2');
+
+        $reportAfter = app(SupervisionResultPdfService::class)->reportData($supervision->fresh());
+        $this->assertSame($reportBefore['structuredSections'], $reportAfter['structuredSections']);
+        $this->assertSame($before, $supervision->fresh()->load('answers')->toArray());
+        $this->assertSame($optionsBefore, $question->fresh()->options->toArray());
     }
 
     private function invalidQuestion(): Question

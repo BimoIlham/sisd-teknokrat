@@ -41,7 +41,9 @@ class ScoringService
                     $numericPoint = (float) $option->numeric_score;
                 }
             } elseif ($question->question_type === 'YES_NO') {
-                $option = $question->options->firstWhere('id', (int) $value);
+                $option = $question->usesDefaultYesNoOptions() || is_bool($value)
+                    ? null
+                    : $question->options->firstWhere('id', (int) $value);
                 if ($option && $option->numeric_score !== null) {
                     $numericPoint = (float) $option->numeric_score;
                 } else {

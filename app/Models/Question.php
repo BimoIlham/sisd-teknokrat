@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Question extends Model
 {
@@ -79,5 +80,28 @@ class Question extends Model
         return $this->question_type === 'YES_NO'
             && $this->options->count() === 2
             && $this->options->pluck('value')->sort()->values()->all() === ['NO', 'YES'];
+    }
+
+    public function usesDefaultYesNoOptions(): bool
+    {
+        return $this->question_type === 'YES_NO' && ! $this->hasValidYesNoOptions();
+    }
+
+    /**
+     * @return Collection<int, array{answer_value: int|string, value: string, label: string, numeric_score: float|null}>
+     */
+    public function answerChoices(): Collection
+    {
+        if ($this->usesDefaultYesNoOptions()) {
+            return collect(self::defaultYesNoOptions())->map(fn (array $option): array => [
+                'answer_value' => $option['value'], 'value' => $option['value'],
+                'label' => $option['label'], 'numeric_score' => $option['numeric_score'],
+            ]);
+        }
+
+        return $this->options->map(fn (QuestionOption $option): array => [
+            'answer_value' => $option->id, 'value' => $option->value, 'label' => $option->label,
+            'numeric_score' => $option->numeric_score !== null ? (float) $option->numeric_score : null,
+        ]);
     }
 }
