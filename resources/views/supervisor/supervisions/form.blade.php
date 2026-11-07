@@ -20,6 +20,39 @@
     saveStatus: 'Tersimpan',
     lastSavedTime: '{{ $supervision->updated_at ? $supervision->updated_at->copy()->timezone('Asia/Jakarta')->format('H:i') : '' }}',
     evidenceList: {{ Illuminate\Support\Js::from($evidencePayload) }},
+    deleteEvidenceUrlTemplate: {{ Illuminate\Support\Js::from(route('supervisor.supervisions.delete_evidence', ['evidence' => '__EVIDENCE_ID__'])) }},
+
+    async readResponseJson(response, fallbackMessage) {
+        const statusMessages = {
+            401: 'Sesi login tidak tersedia. Salin isian yang belum tersimpan, lalu muat ulang halaman dan masuk kembali.',
+            403: 'Permintaan ditolak server (HTTP 403). Hubungi LPM untuk memeriksa akses atau pembatasan server.',
+            413: 'Ukuran unggahan melebihi batas server (HTTP 413). Coba berkas lebih kecil atau hubungi LPM untuk memeriksa batas unggahan.',
+            419: 'Sesi formulir sudah berakhir (HTTP 419). Salin isian yang belum tersimpan, lalu muat ulang halaman dan masuk kembali.',
+            429: 'Terlalu banyak permintaan (HTTP 429). Tunggu sebentar, lalu coba lagi.',
+            500: 'Server gagal memproses permintaan (HTTP 500). Hubungi LPM jika masalah berulang.',
+            502: 'Layanan server sedang bermasalah (HTTP 502). Coba lagi beberapa saat.',
+            503: 'Layanan server belum tersedia (HTTP 503). Coba lagi beberapa saat.',
+            504: 'Server terlalu lama merespons (HTTP 504). Periksa apakah bukti sudah tersimpan sebelum mencoba lagi.',
+        };
+        if (response.redirected) {
+            throw new Error('Permintaan dialihkan ke halaman lain. Salin isian yang belum tersimpan, lalu muat ulang halaman dan periksa sesi login.');
+        }
+        if (response.status === 413) {
+            throw new Error(statusMessages[413]);
+        }
+
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error(statusMessages[response.status] || fallbackMessage + ' Server mengirim respons yang tidak sesuai (HTTP ' + response.status + '). Hubungi LPM.');
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error(statusMessages[response.status] || fallbackMessage + ' Respons server tidak lengkap (HTTP ' + response.status + '). Hubungi LPM.');
+        }
+
+        return data;
+    },
 
     triggerAutoSave() {
         if (this.isReviewing) return;
@@ -45,7 +78,7 @@
             })
         })
         .then(async (response) => {
-            const data = await response.json();
+            const data = await this.readResponseJson(response, 'Gagal menyimpan draf.');
             if (response.status === 409) {
                 this.saveStatus = 'Konflik Versi! Harap refresh halaman.';
                 if (window.Swal) {
@@ -105,8 +138,8 @@
             body: formData
         })
         .then(async (res) => {
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Gagal mengunggah bukti.');
+            const data = await this.readResponseJson(res, 'Gagal mengunggah bukti.');
+            if (!res.ok) throw new Error(data.errors?.file?.[0] || data.message || 'Gagal mengunggah bukti.');
             this.rowVersion = data.row_version;
             this.evidenceList.push({
                 id: data.evidence.id,
@@ -118,6 +151,7 @@
             event.target.value = '';
         })
         .catch(err => {
+            event.target.value = '';
             if (window.Swal) {
                 Swal.fire({
                     icon: 'error',
@@ -148,7 +182,7 @@
                 if (this.isReviewing || this.uploadingQuestionId !== null || this.deletingEvidenceId !== null) return;
                 this.deletingEvidenceId = id;
                 if (this.isSaving) await this.savingPromise;
-                fetch('/supervisor/supervisions/evidence/' + id, {
+                fetch(this.deleteEvidenceUrlTemplate.replace('__EVIDENCE_ID__', encodeURIComponent(id)), {
                     method: 'DELETE',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -156,7 +190,7 @@
                     }
                 })
                 .then(async (res) => {
-                    const data = await res.json();
+                    const data = await this.readResponseJson(res, 'Gagal menghapus bukti.');
                     if (res.ok) {
                         this.rowVersion = data.row_version;
                         this.evidenceList = this.evidenceList.filter(e => e.id !== id);

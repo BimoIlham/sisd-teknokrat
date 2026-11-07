@@ -347,6 +347,10 @@ class SupervisionExecutionController extends Controller
             'file' => ['required', 'file', 'mimes:pdf,png,jpg,jpeg', 'max:5120'],
             'question_id' => ['required', 'integer'],
             'description' => ['nullable', 'string', 'max:255'],
+        ], [
+            'file.mimes' => 'Format berkas harus PDF, PNG, atau JPG.',
+            'file.max' => 'Ukuran berkas maksimal 5 MB.',
+            'file.uploaded' => 'Berkas gagal diterima server. Coba unggah kembali; jika tetap gagal, hubungi LPM untuk memeriksa batas unggahan dan penyimpanan server.',
         ]);
 
         try {
