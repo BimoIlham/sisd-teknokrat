@@ -652,6 +652,7 @@
         const printStyles = document.getElementById('executive-report-print-styles');
 
         const fitReportToPage = () => {
+            report.hidden = false;
             printStyles.media = 'all';
             report.style.setProperty('--report-print-scale', '1');
             report.style.removeProperty('--report-print-width');
@@ -687,20 +688,18 @@
 
         const restoreReportLayout = () => {
             printStyles.media = 'print';
+            report.hidden = true;
             report.style.removeProperty('--report-print-width');
             report.style.removeProperty('--report-print-scale');
         };
 
-        window.printExecutiveReport = async () => {
-            await document.fonts.ready;
-            await Promise.all(Array.from(report.querySelectorAll('img'), (image) => image.decode().catch(() => {}))); 
-            fitReportToPage();
-
+        window.printExecutiveReport = () => {
             try {
+                fitReportToPage();
                 window.print();
             } catch (error) {
                 restoreReportLayout();
-                throw error;
+                window.alert('Dialog cetak tidak dapat dibuka. Buka halaman ini melalui Chrome, Edge, atau Firefox, lalu tekan Ctrl+P dan pilih Simpan sebagai PDF.');
             }
         };
 
