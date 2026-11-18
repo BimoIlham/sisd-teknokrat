@@ -73,6 +73,17 @@
                     </label>
                 </form>
 
+                @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
+                    <div class="self-start lg:self-auto">
+                        @if($canExportExcel)
+                            <a href="{{ route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]) }}" class="filter-button">Ekspor Excel (3 Sheet)</a>
+                        @else
+                            <button type="button" disabled class="filter-button disabled:cursor-not-allowed disabled:opacity-50">Ekspor Excel (3 Sheet)</button>
+                        @endif
+                        <p class="mt-1 text-xs text-slate-500">Tahap 1 dan 2 pada semester terpilih.</p>
+                    </div>
+                @endif
+
                 <button
                     type="button"
                     onclick="window.printExecutiveReport()"
@@ -85,6 +96,10 @@
             </div>
         </div>
     </section>
+
+    @if(session('error'))
+        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{{ session('error') }}</div>
+    @endif
 
     @if(!$selectedPeriod || !$hasSubmissions)
         <section class="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">

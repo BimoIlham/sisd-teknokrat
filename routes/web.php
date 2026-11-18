@@ -13,6 +13,7 @@ use App\Http\Controllers\Lpm\SuperadminDeletionController;
 use App\Http\Controllers\Lpm\SuperadminDuplicateController;
 use App\Http\Controllers\Lpm\SuperadminUserController;
 use App\Http\Controllers\Lpm\SupervisedLecturerController;
+use App\Http\Controllers\Lpm\SupervisionExcelController;
 use App\Http\Controllers\Lpm\SupervisionPeriodController;
 use App\Http\Controllers\Lpm\SupervisorDirectoryController;
 use App\Http\Controllers\Lpm\UnitAccountController;
@@ -102,6 +103,7 @@ Route::middleware(['auth', 'role:superadmin|lpm_admin'])->prefix('lpm')->name('l
 
     // Executive Infographic Supervision Report (Laporan Hasil Supervisi)
     Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    Route::get('/reports/supervision/excel', SupervisionExcelController::class)->middleware('throttle:report-exports')->name('reports.supervision.excel');
     Route::get('/supervisions/completed', [SupervisedLecturerController::class, 'index'])->name('supervisions.completed');
     Route::get('/supervisions/monitoring', [SupervisedLecturerController::class, 'index'])->name('supervisions.monitoring');
 

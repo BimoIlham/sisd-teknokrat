@@ -8,6 +8,7 @@ use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
 use App\Services\OrganizationalScope;
+use App\Services\Reporting\SupervisionExcelExportService;
 use App\Services\Reporting\SupervisionResultPdfService;
 use App\Services\Reporting\SupervisorNoteClassifier;
 use Illuminate\Http\Request;
@@ -110,11 +111,14 @@ class ExecutiveReportController extends Controller
             'hasSubmissions' => $submissions->isNotEmpty(),
         ];
         $notes = $this->findingNotes($submissions);
+        $canExportExcel = ! $scope && $selectedPeriod
+            && app(SupervisionExcelExportService::class)->hasResults($selectedPeriod);
 
         $classifiedNotes = $this->classifyNotes($notes);
         $findings = $this->commonFindings($classifiedNotes);
 
         return view('lpm.reports.executive', $viewData + [
+            'canExportExcel' => $canExportExcel,
             'notesCount' => $notes->count(),
             'commonFindings' => $findings,
         ]);
