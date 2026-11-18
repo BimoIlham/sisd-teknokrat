@@ -31,6 +31,7 @@ class SupervisedLecturerTest extends TestCase
 
         $response->assertSee('Monitoring Supervisi')->assertSee('Belum Disupervisi')->assertSee('Draf')->assertSee('Sudah Disupervisi');
         $response->assertDontSee('value="unassigned"', false)->assertDontSee('value="unfilled"', false)->assertDontSee('value="pending"', false);
+        $response->assertDontSee('Belum ditugaskan');
         $this->assertSame(7, $response->viewData('supervisedLecturers')->total());
         $response->assertSee('Supervisor Alpha')->assertSee('Supervisor Beta');
         $mixed = $response->viewData('supervisedLecturers')->firstWhere('name', 'Target mixed');
@@ -40,12 +41,12 @@ class SupervisedLecturerTest extends TestCase
         $response->assertSee(route('lpm.supervisions.pdf', $scenario['completedSupervision']), false);
     }
 
-    #[TestWith(['not_supervised', '1', ['unassigned', 'cancelled', 'unfilled', 'empty']])]
-    #[TestWith(['not_supervised', 'all', ['unassigned', 'cancelled', 'unfilled', 'empty', 'draft']])]
+    #[TestWith(['not_supervised', '1', ['unfilled', 'empty']])]
+    #[TestWith(['not_supervised', 'all', ['unfilled', 'empty']])]
     #[TestWith(['draft', 'all', ['draft', 'mixed']])]
     #[TestWith(['submitted', 'all', ['completed', 'mixed']])]
     #[TestWith(['submitted', '2', ['completed']])]
-    #[TestWith(['not_supervised', '2', ['unassigned', 'cancelled', 'unfilled', 'empty', 'draft']])]
+    #[TestWith(['not_supervised', '2', []])]
     public function test_filters_progress_on_the_selected_stage(string $status, string $stage, array $expectedTargets): void
     {
         $scenario = $this->createScenario();
@@ -97,12 +98,15 @@ class SupervisedLecturerTest extends TestCase
         $scenario = $this->createScenario();
         $program = $scenario['supervisorA']->studyProgram;
         foreach (range(1, 16) as $number) {
-            $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination '.$number, $program->id);
+            $target = $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination '.$number, $program->id);
+            $this->createAssignment($scenario['period'], $target, $scenario['supervisorA'], 1);
         }
         $otherProgram = StudyProgram::where('faculty_id', $program->faculty_id)->whereKeyNot($program->id)->firstOrFail();
         $otherFacultyProgram = StudyProgram::where('faculty_id', '<>', $program->faculty_id)->firstOrFail();
-        $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other program', $otherProgram->id);
-        $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other faculty', $otherFacultyProgram->id);
+        $otherProgramTarget = $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other program', $otherProgram->id);
+        $otherFacultyTarget = $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other faculty', $otherFacultyProgram->id);
+        $this->createAssignment($scenario['period'], $otherProgramTarget, $scenario['supervisorA'], 1);
+        $this->createAssignment($scenario['period'], $otherFacultyTarget, $scenario['supervisorA'], 1);
         $parameters = [
             'period_id' => $scenario['period']->id, 'search' => 'Pagination', 'status' => 'not_supervised',
             'faculty_id' => $program->faculty_id, 'study_program_id' => $program->id,

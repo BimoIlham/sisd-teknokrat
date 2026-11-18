@@ -81,25 +81,17 @@ class SupervisedLecturerController extends Controller
                 $query->where(function (Builder $lecturers) use ($filteredStageNumbers, $selectedPeriod, $statusFilter, $selectedSupervisorId): void {
                     foreach ($filteredStageNumbers as $stageNumber) {
                         $lecturers->orWhere(function (Builder $matchingLecturers) use ($stageNumber, $selectedPeriod, $statusFilter, $selectedSupervisorId): void {
-                            $activeStageAssignments = function (Builder $assignments) use ($stageNumber, $selectedPeriod): void {
+                            $stageAssignments = function (Builder $assignments) use ($stageNumber, $selectedPeriod, $statusFilter, $selectedSupervisorId): void {
                                 $assignments->where('status', '<>', 'CANCELLED')
                                     ->whereHas('supervisionStage', fn (Builder $stages): Builder => $stages
                                         ->where('supervision_period_id', $selectedPeriod?->id)->where('stage_no', $stageNumber));
-                            };
-                            $stageAssignments = function (Builder $assignments) use ($activeStageAssignments, $statusFilter, $selectedSupervisorId): void {
-                                $activeStageAssignments($assignments);
                                 if ($selectedSupervisorId) {
                                     $assignments->where('supervisor_lecturer_id', $selectedSupervisorId);
                                 }
                                 $this->constrainStatus($assignments, $statusFilter);
                             };
 
-                            if ($statusFilter === 'not_supervised' && ! $selectedSupervisorId) {
-                                $matchingLecturers->whereDoesntHave('assignmentsAsTarget', $activeStageAssignments)
-                                    ->orWhereHas('assignmentsAsTarget', $stageAssignments);
-                            } else {
-                                $matchingLecturers->whereHas('assignmentsAsTarget', $stageAssignments);
-                            }
+                            $matchingLecturers->whereHas('assignmentsAsTarget', $stageAssignments);
                         });
                     }
                 });

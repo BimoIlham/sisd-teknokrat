@@ -79,7 +79,7 @@
                 <a href="{{ route('lpm.supervisions.monitoring', ['period_id' => $selectedPeriod?->id]) }}" class="inline-flex h-10 items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Reset</a>
             </div>
         </form>
-        <p class="mt-3 text-xs text-slate-500">Belum Disupervisi mencakup dosen yang belum ditugaskan atau formulirnya belum diisi. Draf berarti penilaian sudah mulai diisi tetapi belum dikirim. Filter status dan supervisor berlaku pada tahap yang sama; jika semua tahap dipilih, cukup salah satu tahap yang cocok.</p>
+        <p class="mt-3 text-xs text-slate-500">Belum Disupervisi berarti formulir penilaian belum diisi. Draf berarti penilaian sudah mulai diisi tetapi belum dikirim. Filter status dan supervisor berlaku pada tahap yang sama; jika semua tahap dipilih, cukup salah satu tahap yang cocok.</p>
         @if($showUnfinishedTasks)
             <p class="mt-2 text-sm font-semibold text-blue-700">Menampilkan tugas yang belum dikirim, termasuk Draf. Gunakan filter di atas untuk memilih status tertentu.</p>
         @endif
@@ -140,8 +140,7 @@
                                         @if(!in_array($stageNumber, $stageNumbers, true))
                                             <span class="text-xs text-slate-500">Tahap belum diatur</span>
                                         @elseif(!$assignment)
-                                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Belum Disupervisi</span>
-                                            <p class="mt-1 text-xs text-slate-500">Belum ditugaskan</p>
+                                            <span class="text-xs text-slate-400">-</span>
                                         @elseif($supervision?->status === 'SUBMITTED')
                                             <div class="font-semibold text-emerald-700">Sudah Disupervisi · {{ number_format((float) $supervision->final_score, 2) }}</div>
                                             <div class="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
