@@ -103,6 +103,7 @@ Route::middleware(['auth', 'role:superadmin|lpm_admin'])->prefix('lpm')->name('l
     // Executive Infographic Supervision Report (Laporan Hasil Supervisi)
     Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
     Route::get('/supervisions/completed', [SupervisedLecturerController::class, 'index'])->name('supervisions.completed');
+    Route::get('/supervisions/monitoring', [SupervisedLecturerController::class, 'index'])->name('supervisions.monitoring');
 
     // Lecturer Directory & Reports
     Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');

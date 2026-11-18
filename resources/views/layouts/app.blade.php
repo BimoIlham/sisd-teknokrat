@@ -292,12 +292,12 @@
                     </a>
 
                     <a
-                        href="{{ route('lpm.supervisions.completed') }}"
-                        class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors {{ request()->routeIs('lpm.supervisions.completed') ? 'bg-white text-[#7B1113] font-bold shadow-xs' : 'text-rose-100/90 hover:text-white hover:bg-white/10' }}"
-                        :title="sidebarCollapsed ? 'Dosen yang Sudah Disupervisi' : ''"
+                        href="{{ route('lpm.supervisions.monitoring') }}"
+                        class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors {{ request()->routeIs('lpm.supervisions.completed', 'lpm.supervisions.monitoring') ? 'bg-white text-[#7B1113] font-bold shadow-xs' : 'text-rose-100/90 hover:text-white hover:bg-white/10' }}"
+                        :title="sidebarCollapsed ? 'Monitoring Supervisi' : ''"
                     >
                         <svg class="w-4.5 h-4.5 mr-3 text-rose-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.053-.382-3.016z"></path></svg>
-                        <span x-show="!sidebarCollapsed" class="truncate">Dosen yang Sudah Disupervisi</span>
+                        <span x-show="!sidebarCollapsed" class="truncate">Monitoring Supervisi</span>
                     </a>
                 </div>
             </div>

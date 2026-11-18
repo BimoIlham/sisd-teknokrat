@@ -9,6 +9,7 @@ use App\Models\StudyProgram;
 use App\Models\SupervisionPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -17,7 +18,7 @@ class SupervisedLecturerController extends Controller
     public function index(Request $request): View
     {
         $periods = SupervisionPeriod::query()
-            ->with('academicTerm')
+            ->with(['academicTerm', 'stages'])
             ->orderByDesc('starts_on')
             ->get();
         $selectedPeriod = $request->filled('period_id')
@@ -33,6 +34,15 @@ class SupervisedLecturerController extends Controller
         $selectedProgramId = $request->integer('study_program_id') ?: null;
         $requestedStage = (string) $request->input('stage', 'all');
         $selectedStage = in_array($requestedStage, ['1', '2'], true) ? $requestedStage : 'all';
+        $requestedStatus = (string) $request->input('status', $request->routeIs('lpm.supervisions.completed') ? 'submitted' : 'all');
+        $selectedStatus = in_array($requestedStatus, ['unassigned', 'unfilled', 'draft', 'submitted', 'pending'], true) ? $requestedStatus : 'all';
+        $selectedSupervisorId = $request->integer('supervisor_id') ?: null;
+        $stageNumbers = $selectedPeriod?->stages->pluck('stage_no')->all() ?? [];
+        $supervisors = Lecturer::query()
+            ->whereHas('assignmentsAsSupervisor', fn (Builder $query): Builder => $query
+                ->where('status', '<>', 'CANCELLED')
+                ->whereHas('supervisionStage', fn (Builder $stageQuery): Builder => $stageQuery->where('supervision_period_id', $selectedPeriod?->id)))
+            ->orderBy('name')->get(['id', 'name']);
         $search = trim((string) $request->input('search', ''));
         $studyPrograms = StudyProgram::query()
             ->where('is_active', true)
@@ -44,17 +54,13 @@ class SupervisedLecturerController extends Controller
             $selectedProgramId = null;
         }
 
-        $supervisedLecturers = Lecturer::query()
-            ->whereHas('assignmentsAsTarget', function (Builder $query) use ($selectedPeriod, $selectedStage): void {
-                $query->where('status', '<>', 'CANCELLED')
-                    ->whereHas('supervision', fn (Builder $supervisionQuery) => $supervisionQuery->where('status', 'SUBMITTED'))
-                    ->whereHas('supervisionStage', function (Builder $stageQuery) use ($selectedPeriod, $selectedStage): void {
-                        $stageQuery->where('supervision_period_id', $selectedPeriod?->id);
-
-                        if ($selectedStage !== 'all') {
-                            $stageQuery->where('stage_no', (int) $selectedStage);
-                        }
-                    });
+        $query = Lecturer::query()
+            ->where(function (Builder $lecturers) use ($selectedPeriod): void {
+                $lecturers->whereHas('periodTargets', fn (Builder $targets): Builder => $targets
+                    ->where('supervision_period_id', $selectedPeriod?->id)->where('scope_status', 'INCLUDED'))
+                    ->orWhereHas('assignmentsAsTarget', fn (Builder $assignments): Builder => $assignments
+                        ->where('status', '<>', 'CANCELLED')
+                        ->whereHas('supervisionStage', fn (Builder $stages): Builder => $stages->where('supervision_period_id', $selectedPeriod?->id)));
             })
             ->when($selectedFacultyId, fn (Builder $query): Builder => $query->where('faculty_id', $selectedFacultyId))
             ->when($selectedProgramId, fn (Builder $query): Builder => $query->where('study_program_id', $selectedProgramId))
@@ -63,21 +69,54 @@ class SupervisedLecturerController extends Controller
                     $searchQuery->where('name', 'like', "%{$search}%")
                         ->orWhere('external_code', 'like', "%{$search}%");
                 });
-            })
-            ->with([
-                'faculty',
-                'studyProgram',
-                'assignmentsAsTarget' => function (HasMany $query) use ($selectedPeriod): void {
-                    $query->where('status', '<>', 'CANCELLED')
-                        ->whereHas('supervisionStage', fn (Builder $stageQuery) => $stageQuery->where('supervision_period_id', $selectedPeriod?->id))
-                        ->with([
-                            'supervisorLecturer',
-                            'supervisionStage',
-                            'supervision',
-                            'teachingOccurrence.teachingSchedule.course',
-                        ]);
-                },
-            ])
+            });
+
+        if ($selectedStatus === 'unassigned' && $selectedSupervisorId) {
+            $query->whereKey([]);
+        } elseif ($selectedStatus !== 'all' || $selectedSupervisorId) {
+            $filteredStageNumbers = $selectedStage === 'all' ? $stageNumbers : array_intersect($stageNumbers, [(int) $selectedStage]);
+            if ($filteredStageNumbers === []) {
+                $query->whereKey([]);
+            } else {
+                $query->where(function (Builder $lecturers) use ($filteredStageNumbers, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
+                    foreach ($filteredStageNumbers as $stageNumber) {
+                        $lecturers->orWhere(function (Builder $matchingLecturers) use ($stageNumber, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
+                            $stageAssignments = function (Builder $assignments) use ($stageNumber, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
+                                $assignments->where('status', '<>', 'CANCELLED')
+                                    ->whereHas('supervisionStage', fn (Builder $stages): Builder => $stages
+                                        ->where('supervision_period_id', $selectedPeriod?->id)->where('stage_no', $stageNumber));
+                                if ($selectedSupervisorId) {
+                                    $assignments->where('supervisor_lecturer_id', $selectedSupervisorId);
+                                }
+                                $this->constrainStatus($assignments, $selectedStatus);
+                            };
+
+                            if ($selectedStatus === 'unassigned') {
+                                $matchingLecturers->whereDoesntHave('assignmentsAsTarget', $stageAssignments);
+                            } else {
+                                $matchingLecturers->whereHas('assignmentsAsTarget', $stageAssignments);
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        $supervisedLecturers = $query->with([
+            'faculty',
+            'studyProgram',
+            'assignmentsAsTarget' => function (HasMany $query) use ($selectedPeriod): void {
+                $query->where('status', '<>', 'CANCELLED')
+                    ->whereHas('supervisionStage', fn (Builder $stageQuery): Builder => $stageQuery->where('supervision_period_id', $selectedPeriod?->id))
+                    ->with([
+                        'supervisorLecturer',
+                        'supervisionStage',
+                        'supervision' => function (HasOne $relation): void {
+                            $relation->getQuery()->withExists(['answers' => $this->filledAnswers(...)]);
+                        },
+                    ]);
+            },
+        ])
             ->orderBy('name')
             ->orderByDesc('id')
             ->paginate(15)
@@ -91,8 +130,36 @@ class SupervisedLecturerController extends Controller
             'selectedFacultyId',
             'selectedProgramId',
             'selectedStage',
+            'selectedStatus',
+            'selectedSupervisorId',
+            'stageNumbers',
+            'supervisors',
             'search',
             'supervisedLecturers'
         ));
+    }
+
+    private function constrainStatus(Builder $assignments, string $status): void
+    {
+        if ($status === 'submitted') {
+            $assignments->whereHas('supervision', fn (Builder $supervisions): Builder => $supervisions->where('status', 'SUBMITTED'));
+        } elseif (in_array($status, ['pending', 'unfilled', 'draft'], true)) {
+            $assignments->whereDoesntHave('supervision', fn (Builder $supervisions): Builder => $supervisions->where('status', 'SUBMITTED'));
+            if ($status === 'draft') {
+                $assignments->whereHas('supervision.answers', $this->filledAnswers(...));
+            } elseif ($status === 'unfilled') {
+                $assignments->whereDoesntHave('supervision.answers', $this->filledAnswers(...));
+            }
+        }
+    }
+
+    private function filledAnswers(Builder $answers): void
+    {
+        $answers->where(fn (Builder $values): Builder => $values
+            ->whereNotNull('question_option_id')
+            ->orWhereNotNull('boolean_value')
+            ->orWhereNotNull('numeric_score')
+            ->orWhere('text_value', '<>', '')
+            ->orWhere('notes', '<>', ''));
     }
 }

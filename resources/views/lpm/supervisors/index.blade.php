@@ -80,7 +80,7 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
+        <a href="{{ route('lpm.supervisions.monitoring', ['period_id' => $selectedPeriod?->id, 'status' => 'pending']) }}" class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center gap-3.5 transition-colors hover:border-blue-300 hover:bg-blue-50/40" aria-label="Lihat dosen dengan tugas supervisi belum selesai">
             <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
@@ -88,8 +88,9 @@
                 <p class="text-xs text-slate-500 font-medium">Tugas Belum Selesai</p>
                 <p class="text-xl sm:text-2xl font-bold text-blue-700 mt-0.5">{{ $pendingAssignmentsCount }}</p>
                 <p class="text-[11px] text-slate-400 mt-1">Tugas yang hasil supervisinya belum dikirim</p>
+                <p class="text-[11px] font-semibold text-blue-700 mt-1">Lihat daftar dosen →</p>
             </div>
-        </div>
+        </a>
 
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
             <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
