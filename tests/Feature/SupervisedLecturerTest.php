@@ -29,7 +29,8 @@ class SupervisedLecturerTest extends TestCase
 
         $response = $this->actingAs($scenario['admin'])->get(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id]));
 
-        $response->assertSee('Monitoring Supervisi')->assertSee('Belum ditugaskan')->assertSee('Belum Diisi')->assertSee('Draf')->assertSee('Selesai');
+        $response->assertSee('Monitoring Supervisi')->assertSee('Belum Disupervisi')->assertSee('Draf')->assertSee('Sudah Disupervisi');
+        $response->assertDontSee('value="unassigned"', false)->assertDontSee('value="unfilled"', false)->assertDontSee('value="pending"', false);
         $this->assertSame(7, $response->viewData('supervisedLecturers')->total());
         $response->assertSee('Supervisor Alpha')->assertSee('Supervisor Beta');
         $mixed = $response->viewData('supervisedLecturers')->firstWhere('name', 'Target mixed');
@@ -39,13 +40,12 @@ class SupervisedLecturerTest extends TestCase
         $response->assertSee(route('lpm.supervisions.pdf', $scenario['completedSupervision']), false);
     }
 
-    #[TestWith(['unassigned', '1', ['unassigned', 'cancelled']])]
-    #[TestWith(['unfilled', 'all', ['unfilled', 'empty']])]
+    #[TestWith(['not_supervised', '1', ['unassigned', 'cancelled', 'unfilled', 'empty']])]
+    #[TestWith(['not_supervised', 'all', ['unassigned', 'cancelled', 'unfilled', 'empty', 'draft']])]
     #[TestWith(['draft', 'all', ['draft', 'mixed']])]
     #[TestWith(['submitted', 'all', ['completed', 'mixed']])]
-    #[TestWith(['pending', 'all', ['unfilled', 'empty', 'draft', 'mixed']])]
     #[TestWith(['submitted', '2', ['completed']])]
-    #[TestWith(['pending', '2', ['mixed']])]
+    #[TestWith(['not_supervised', '2', ['unassigned', 'cancelled', 'unfilled', 'empty', 'draft']])]
     public function test_filters_progress_on_the_selected_stage(string $status, string $stage, array $expectedTargets): void
     {
         $scenario = $this->createScenario();
@@ -74,8 +74,8 @@ class SupervisedLecturerTest extends TestCase
             'period_id' => $scenario['period']->id, 'supervisor_id' => $scenario['supervisorB']->id, 'status' => 'draft',
         ]))->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->pluck('name')->all() === ['Target mixed']);
         $this->get(route('lpm.supervisions.monitoring', [
-            'period_id' => $scenario['period']->id, 'supervisor_id' => $scenario['supervisorA']->id, 'status' => 'unassigned',
-        ]))->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->isEmpty());
+            'period_id' => $scenario['period']->id, 'supervisor_id' => $scenario['supervisorA']->id, 'status' => 'not_supervised',
+        ]))->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->pluck('name')->all() === ['Target empty', 'Target unfilled']);
     }
 
     public function test_pending_card_opens_monitoring_for_its_period_and_counts_tasks_instead_of_unique_lecturers(): void
@@ -86,6 +86,10 @@ class SupervisedLecturerTest extends TestCase
 
         $response->assertSee(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id, 'status' => 'pending']));
         $response->assertViewHas('totalAssignments', 7)->assertViewHas('pendingAssignmentsCount', 4)->assertViewHas('totalCompletedAssignments', 3);
+        $this->get(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id, 'status' => 'pending']))
+            ->assertSee('Menampilkan tugas yang belum dikirim, termasuk Draf.')
+            ->assertDontSee('value="pending"', false)
+            ->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->pluck('name')->all() === ['Target draft', 'Target empty', 'Target mixed', 'Target unfilled']);
     }
 
     public function test_search_organization_filters_and_pagination_keep_the_selected_filters(): void
@@ -100,7 +104,7 @@ class SupervisedLecturerTest extends TestCase
         $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other program', $otherProgram->id);
         $this->createTarget($scenario['period'], $scenario['admin'], 'Pagination other faculty', $otherFacultyProgram->id);
         $parameters = [
-            'period_id' => $scenario['period']->id, 'search' => 'Pagination', 'status' => 'unassigned',
+            'period_id' => $scenario['period']->id, 'search' => 'Pagination', 'status' => 'not_supervised',
             'faculty_id' => $program->faculty_id, 'study_program_id' => $program->id,
         ];
 
@@ -108,7 +112,7 @@ class SupervisedLecturerTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(16, $response->viewData('supervisedLecturers')->total());
-        $response->assertSee('search=Pagination')->assertSee('status=unassigned')->assertSee('page=2');
+        $response->assertSee('search=Pagination')->assertSee('status=not_supervised')->assertSee('page=2');
         $this->get(route('lpm.supervisions.monitoring', $parameters + ['page' => 2]))
             ->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->count() === 1);
     }
@@ -140,7 +144,7 @@ class SupervisedLecturerTest extends TestCase
         $scenario = $this->createScenario();
         $scenario['period']->stages()->where('stage_no', 2)->firstOrFail()->update(['stage_no' => 3]);
         $this->withSession(['password_hash_web' => null])->actingAs($scenario['admin'])
-            ->get(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id, 'stage' => '2', 'status' => 'unassigned']))
+            ->get(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id, 'stage' => '2', 'status' => 'not_supervised']))
             ->assertViewHas('supervisedLecturers', fn ($lecturers): bool => $lecturers->isEmpty());
         $this->get(route('lpm.supervisions.monitoring', ['period_id' => $scenario['period']->id]))->assertSee('Tahap belum diatur');
     }

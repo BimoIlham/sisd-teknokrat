@@ -35,7 +35,9 @@ class SupervisedLecturerController extends Controller
         $requestedStage = (string) $request->input('stage', 'all');
         $selectedStage = in_array($requestedStage, ['1', '2'], true) ? $requestedStage : 'all';
         $requestedStatus = (string) $request->input('status', $request->routeIs('lpm.supervisions.completed') ? 'submitted' : 'all');
-        $selectedStatus = in_array($requestedStatus, ['unassigned', 'unfilled', 'draft', 'submitted', 'pending'], true) ? $requestedStatus : 'all';
+        $selectedStatus = in_array($requestedStatus, ['not_supervised', 'draft', 'submitted'], true) ? $requestedStatus : 'all';
+        $showUnfinishedTasks = $requestedStatus === 'pending';
+        $statusFilter = $showUnfinishedTasks ? 'pending' : $selectedStatus;
         $selectedSupervisorId = $request->integer('supervisor_id') ?: null;
         $stageNumbers = $selectedPeriod?->stages->pluck('stage_no')->all() ?? [];
         $supervisors = Lecturer::query()
@@ -71,28 +73,30 @@ class SupervisedLecturerController extends Controller
                 });
             });
 
-        if ($selectedStatus === 'unassigned' && $selectedSupervisorId) {
-            $query->whereKey([]);
-        } elseif ($selectedStatus !== 'all' || $selectedSupervisorId) {
+        if ($statusFilter !== 'all' || $selectedSupervisorId) {
             $filteredStageNumbers = $selectedStage === 'all' ? $stageNumbers : array_intersect($stageNumbers, [(int) $selectedStage]);
             if ($filteredStageNumbers === []) {
                 $query->whereKey([]);
             } else {
-                $query->where(function (Builder $lecturers) use ($filteredStageNumbers, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
+                $query->where(function (Builder $lecturers) use ($filteredStageNumbers, $selectedPeriod, $statusFilter, $selectedSupervisorId): void {
                     foreach ($filteredStageNumbers as $stageNumber) {
-                        $lecturers->orWhere(function (Builder $matchingLecturers) use ($stageNumber, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
-                            $stageAssignments = function (Builder $assignments) use ($stageNumber, $selectedPeriod, $selectedStatus, $selectedSupervisorId): void {
+                        $lecturers->orWhere(function (Builder $matchingLecturers) use ($stageNumber, $selectedPeriod, $statusFilter, $selectedSupervisorId): void {
+                            $activeStageAssignments = function (Builder $assignments) use ($stageNumber, $selectedPeriod): void {
                                 $assignments->where('status', '<>', 'CANCELLED')
                                     ->whereHas('supervisionStage', fn (Builder $stages): Builder => $stages
                                         ->where('supervision_period_id', $selectedPeriod?->id)->where('stage_no', $stageNumber));
+                            };
+                            $stageAssignments = function (Builder $assignments) use ($activeStageAssignments, $statusFilter, $selectedSupervisorId): void {
+                                $activeStageAssignments($assignments);
                                 if ($selectedSupervisorId) {
                                     $assignments->where('supervisor_lecturer_id', $selectedSupervisorId);
                                 }
-                                $this->constrainStatus($assignments, $selectedStatus);
+                                $this->constrainStatus($assignments, $statusFilter);
                             };
 
-                            if ($selectedStatus === 'unassigned') {
-                                $matchingLecturers->whereDoesntHave('assignmentsAsTarget', $stageAssignments);
+                            if ($statusFilter === 'not_supervised' && ! $selectedSupervisorId) {
+                                $matchingLecturers->whereDoesntHave('assignmentsAsTarget', $activeStageAssignments)
+                                    ->orWhereHas('assignmentsAsTarget', $stageAssignments);
                             } else {
                                 $matchingLecturers->whereHas('assignmentsAsTarget', $stageAssignments);
                             }
@@ -131,6 +135,7 @@ class SupervisedLecturerController extends Controller
             'selectedProgramId',
             'selectedStage',
             'selectedStatus',
+            'showUnfinishedTasks',
             'selectedSupervisorId',
             'stageNumbers',
             'supervisors',
@@ -143,11 +148,11 @@ class SupervisedLecturerController extends Controller
     {
         if ($status === 'submitted') {
             $assignments->whereHas('supervision', fn (Builder $supervisions): Builder => $supervisions->where('status', 'SUBMITTED'));
-        } elseif (in_array($status, ['pending', 'unfilled', 'draft'], true)) {
+        } elseif (in_array($status, ['not_supervised', 'draft', 'pending'], true)) {
             $assignments->whereDoesntHave('supervision', fn (Builder $supervisions): Builder => $supervisions->where('status', 'SUBMITTED'));
             if ($status === 'draft') {
                 $assignments->whereHas('supervision.answers', $this->filledAnswers(...));
-            } elseif ($status === 'unfilled') {
+            } elseif ($status === 'not_supervised') {
                 $assignments->whereDoesntHave('supervision.answers', $this->filledAnswers(...));
             }
         }
