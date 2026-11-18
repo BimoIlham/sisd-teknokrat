@@ -5,12 +5,18 @@ namespace Tests\Feature;
 use App\Models\AcademicTerm;
 use App\Models\Course;
 use App\Models\Lecturer;
+use App\Models\PeriodTarget;
+use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
+use App\Models\TeachingOccurrence;
 use App\Models\TeachingSchedule;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\DemoAcademicSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class SupervisionPeriodTest extends TestCase
@@ -518,5 +524,159 @@ class SupervisionPeriodTest extends TestCase
         $response->assertSee('Aktif');
         $response->assertDontSee('Kelola / Tambah Periode Supervisi');
         $response->assertSee('Semester Ganjil');
+    }
+
+    public function test_assignment_counts_exclude_cancelled_history_and_do_not_fall_back_to_target_counts(): void
+    {
+        $this->seed([UserSeeder::class, DemoAcademicSeeder::class]);
+        $period = SupervisionPeriod::where('is_demo', true)->with('stages')->firstOrFail();
+        $occurrence = TeachingOccurrence::with('teachingSchedule')->firstOrFail();
+        $targetId = $occurrence->teachingSchedule->lecturer_id;
+        $supervisor = Lecturer::whereKeyNot($targetId)->firstOrFail();
+        foreach ([[1, 'CANCELLED'], [1, 'CANCELLED'], [1, 'FINAL'], [2, 'DRAFT']] as [$stageNumber, $status]) {
+            SupervisionAssignment::create([
+                'supervision_stage_id' => $period->stages->firstWhere('stage_no', $stageNumber)->id,
+                'target_lecturer_id' => $targetId,
+                'supervisor_lecturer_id' => $supervisor->id,
+                'teaching_occurrence_id' => $occurrence->id,
+                'assignment_type' => 'MANUAL',
+                'status' => $status,
+            ]);
+        }
+        $emptyPeriod = SupervisionPeriod::create([
+            'academic_term_id' => $period->academic_term_id, 'name' => 'Periode Tanpa Penugasan',
+            'starts_on' => $period->starts_on, 'ends_on' => $period->ends_on,
+            'status' => 'CLOSED', 'created_by' => $this->admin->id,
+        ]);
+        PeriodTarget::create([
+            'supervision_period_id' => $emptyPeriod->id, 'lecturer_id' => $targetId,
+            'scope_status' => 'INCLUDED', 'selected_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('lpm.periods.index'));
+
+        $response->assertOk();
+        $this->assertSame(2, $response->viewData('periods')->firstWhere('id', $period->id)->assignments_count);
+        $this->assertSame(0, $response->viewData('periods')->firstWhere('id', $emptyPeriod->id)->assignments_count);
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $countCell = (new \DOMXPath($document))->query('//tr[td[1][contains(., "Periode Tanpa Penugasan")]]/td[4]')->item(0);
+        $this->assertNotNull($countCell);
+        $this->assertSame('0', trim($countCell->textContent));
+        $this->assertSame(4, $period->assignments()->count());
+        $this->assertSame(2, $period->assignments()->where('supervision_assignments.status', 'CANCELLED')->count());
+        $response->assertSee('Periode ganda pada semester ini');
+    }
+
+    #[TestWith(['ACTIVE'])]
+    #[TestWith(['CLOSED'])]
+    public function test_repeated_creation_of_the_same_semester_is_rejected_without_changing_the_existing_period(string $status): void
+    {
+        $payload = $this->semesterPeriodPayload(2040);
+        $payload['status'] = $status;
+        $this->actingAs($this->admin)->post(route('lpm.periods.store'), $payload)->assertSessionHasNoErrors();
+        $period = SupervisionPeriod::where('name', $payload['name'])->firstOrFail();
+        $stageIds = $period->stages()->orderBy('stage_no')->pluck('id')->all();
+
+        $response = $this->post(route('lpm.periods.store'), [...$payload, 'name' => 'Nama baru untuk semester yang sama', 'status' => 'ACTIVE']);
+
+        $response->assertSessionHasErrors(['academic_year' => 'Periode supervisi untuk semester dan tahun ajaran ini sudah ada. Gunakan Edit pada periode yang tersedia.']);
+        $this->assertSame(1, SupervisionPeriod::where('academic_term_id', $period->academic_term_id)->count());
+        $this->assertSame($status, $period->fresh()->status);
+        $this->assertSame($payload['name'], $period->fresh()->name);
+        $this->assertSame($stageIds, $period->stages()->orderBy('stage_no')->pluck('id')->all());
+    }
+
+    public function test_editing_a_period_cannot_move_it_to_an_occupied_semester(): void
+    {
+        $firstPayload = $this->semesterPeriodPayload(2041);
+        $secondPayload = $this->semesterPeriodPayload(2042);
+        $this->actingAs($this->admin)->post(route('lpm.periods.store'), $firstPayload)->assertSessionHasNoErrors();
+        $this->post(route('lpm.periods.store'), $secondPayload)->assertSessionHasNoErrors();
+        $firstPeriod = SupervisionPeriod::where('name', $firstPayload['name'])->firstOrFail();
+        $secondPeriod = SupervisionPeriod::where('name', $secondPayload['name'])->firstOrFail();
+        $originalTermId = $secondPeriod->academic_term_id;
+
+        $response = $this->put(route('lpm.periods.update', $secondPeriod), $firstPayload);
+
+        $response->assertSessionHasErrors('academic_year');
+        $this->assertSame($originalTermId, $secondPeriod->fresh()->academic_term_id);
+        $this->assertSame($secondPayload['name'], $secondPeriod->fresh()->name);
+        $this->assertSame('ACTIVE', $secondPeriod->fresh()->status);
+        $this->assertSame('CLOSED', $firstPeriod->fresh()->status);
+    }
+
+    public function test_legacy_duplicate_periods_can_still_be_edited_in_place_without_removing_history(): void
+    {
+        $payload = $this->semesterPeriodPayload(2043);
+        $this->actingAs($this->admin)->post(route('lpm.periods.store'), $payload)->assertSessionHasNoErrors();
+        $period = SupervisionPeriod::where('name', $payload['name'])->firstOrFail();
+        $duplicate = $period->replicate();
+        $duplicate->status = 'CLOSED';
+        $duplicate->active_scheduling_rule_id = null;
+        $duplicate->save();
+
+        $response = $this->put(route('lpm.periods.update', $period), [...$payload, 'name' => 'Periode lama yang diperbarui']);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(2, SupervisionPeriod::where('academic_term_id', $period->academic_term_id)->count());
+        $this->assertModelExists($duplicate);
+        $this->assertSame('Periode lama yang diperbarui', $period->fresh()->name);
+        $this->get(route('lpm.periods.index', ['status' => 'ACTIVE']))->assertSee('Periode ganda pada semester ini');
+    }
+
+    public function test_legacy_stage_creation_cannot_create_a_duplicate_by_using_a_different_name(): void
+    {
+        $payload = [
+            'name' => 'Periode Tahap Tunggal', 'academic_year' => '2044/2045', 'semester' => 'GANJIL',
+            'stage_no' => 1, 'starts_on' => '2044-09-01', 'ends_on' => '2044-10-31', 'status' => 'ACTIVE',
+        ];
+        $this->actingAs($this->admin)->post(route('lpm.periods.store'), $payload)->assertSessionHasNoErrors();
+        $period = SupervisionPeriod::where('name', $payload['name'])->firstOrFail();
+
+        $response = $this->post(route('lpm.periods.store'), [...$payload, 'name' => 'Nama periode yang berbeda']);
+
+        $response->assertSessionHasErrors('stage_no');
+        $this->assertSame(1, SupervisionPeriod::where('academic_term_id', $period->academic_term_id)->count());
+        $this->assertSame($payload['name'], $period->fresh()->name);
+    }
+
+    public function test_adding_a_stage_requires_an_explicit_period_when_legacy_duplicates_exist(): void
+    {
+        $payload = [
+            'name' => 'Periode Tahap Lama', 'academic_year' => '2045/2046', 'semester' => 'GANJIL',
+            'stage_no' => 1, 'starts_on' => '2045-09-01', 'ends_on' => '2045-10-31', 'status' => 'ACTIVE',
+        ];
+        $this->actingAs($this->admin)->post(route('lpm.periods.store'), $payload)->assertSessionHasNoErrors();
+        $period = SupervisionPeriod::where('name', $payload['name'])->firstOrFail();
+        $duplicate = $period->replicate();
+        $duplicate->status = 'CLOSED';
+        $duplicate->active_scheduling_rule_id = null;
+        $duplicate->save();
+        $secondStage = [...$payload, 'stage_no' => 2, 'starts_on' => '2045-11-01', 'ends_on' => '2046-01-31'];
+
+        $response = $this->post(route('lpm.periods.store'), $secondStage);
+
+        $response->assertSessionHasErrors('academic_year');
+        $this->assertSame(1, $period->stages()->count());
+        $this->assertSame(0, $duplicate->stages()->count());
+        $this->post(route('lpm.periods.store'), [...$secondStage, 'period_id' => $period->id])->assertSessionHasNoErrors();
+        $this->assertSame(2, $period->stages()->count());
+        $this->assertSame(0, $duplicate->stages()->count());
+        $this->assertSame(2, SupervisionPeriod::where('academic_term_id', $period->academic_term_id)->count());
+    }
+
+    /**
+     * @return array{name: string, academic_year: string, semester: string, stage_1_starts_on: string, stage_1_ends_on: string, stage_2_starts_on: string, stage_2_ends_on: string, status: string}
+     */
+    private function semesterPeriodPayload(int $year): array
+    {
+        return [
+            'name' => 'Periode Uji '.$year,
+            'academic_year' => $year.'/'.($year + 1), 'semester' => 'GANJIL',
+            'stage_1_starts_on' => $year.'-09-01', 'stage_1_ends_on' => $year.'-10-31',
+            'stage_2_starts_on' => $year.'-11-01', 'stage_2_ends_on' => ($year + 1).'-01-31',
+            'status' => 'ACTIVE',
+        ];
     }
 }

@@ -159,7 +159,11 @@ class SemesterSupervisionTest extends TestCase
         $evenPeriod->update(['status' => 'ACTIVE']);
 
         $this->withSession(['password_hash_web' => null]);
-        $anotherOddPeriod = $this->createPeriod($admin, 'GANJIL');
+        $anotherOddPeriod = $oddPeriod->replicate();
+        $anotherOddPeriod->name = 'Riwayat periode ganjil lama';
+        $anotherOddPeriod->status = 'CLOSED';
+        $anotherOddPeriod->active_scheduling_rule_id = null;
+        $anotherOddPeriod->save();
         $this->actingAs($admin)->get(route('lpm.reports.supervision', ['period_id' => $anotherOddPeriod->id]))
             ->assertOk()
             ->assertSee('Belum ada hasil supervisi')

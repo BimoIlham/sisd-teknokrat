@@ -203,6 +203,9 @@
                                         Tahun Ajaran {{ $period->academicTerm->academic_year }} · {{ $period->academicTerm->semester_label }} · {{ $period->starts_on?->format('d M Y') }} – {{ $period->ends_on?->format('d M Y') }}
                                     </span>
                                 @endif
+                                @if(in_array($period->academic_term_id, $duplicateSemesterIds, true))
+                                    <span class="mt-1 block text-[11px] font-semibold text-amber-800">Periode ganda pada semester ini</span>
+                                @endif
                             </td>
 
                             <!-- Tahap 1 -->
@@ -225,8 +228,8 @@
 
 
                             <!-- Penugasan -->
-                            <td class="px-5 py-4 text-center font-bold text-slate-800">
-                                {{ $period->assignments_count ?: ($period->targets_count ?: 0) }}
+                            <td class="px-5 py-4 text-center font-bold text-slate-800" title="Total tugas Tahap 1 dan Tahap 2, tanpa tugas yang dibatalkan">
+                                {{ $period->assignments_count }}
                             </td>
 
                             <!-- Status -->

@@ -14,6 +14,7 @@ use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
 use App\Services\Scheduling\SchedulingLockService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,9 @@ class SupervisionPeriodController extends Controller
     public function index(Request $request): View
     {
         $query = SupervisionPeriod::with(['academicTerm', 'stages'])
-            ->withCount(['targets', 'supervisors', 'assignments']);
+            ->withCount(['assignments' => fn (Builder $assignments): Builder => $assignments->where('supervision_assignments.status', '<>', 'CANCELLED')]);
+        $duplicateSemesterIds = SupervisionPeriod::query()->select('academic_term_id')
+            ->groupBy('academic_term_id')->havingRaw('COUNT(*) > 1')->pluck('academic_term_id')->all();
 
         // Search by period name
         if ($search = $request->query('search')) {
@@ -50,7 +53,7 @@ class SupervisionPeriodController extends Controller
         $currentAcademicYear = now()->month >= 7 ? now()->year : now()->year - 1;
         $defaultAcademicYear = $currentAcademicYear.'/'.($currentAcademicYear + 1);
 
-        return view('lpm.periods.index', compact('periods', 'perPage', 'defaultAcademicYear'));
+        return view('lpm.periods.index', compact('periods', 'perPage', 'defaultAcademicYear', 'duplicateSemesterIds'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -80,6 +83,7 @@ class SupervisionPeriodController extends Controller
             $locks = app(SchedulingLockService::class);
             $state = $locks->state();
             $term = $this->resolveSelectedSemester($validated['academic_year'], $validated['semester'], $validated['stage_1_starts_on'], $validated['stage_2_ends_on']);
+            $this->ensureSemesterAvailable($term->id);
 
             // Enforce business rule: only ONE period can be active at any given time
             if ($validated['status'] === 'ACTIVE') {
@@ -192,6 +196,9 @@ class SupervisionPeriodController extends Controller
             $state = $locks->state();
             $period = $locks->period($period->id);
             $term = $this->resolveSelectedSemester($validated['academic_year'], $validated['semester'], $validated['stage_1_starts_on'], $validated['stage_2_ends_on']);
+            if ($period->academic_term_id !== $term->id) {
+                $this->ensureSemesterAvailable($term->id);
+            }
 
             if ($validated['status'] === 'ACTIVE' && $period->status !== 'ACTIVE') {
                 SupervisionPeriod::where('status', 'ACTIVE')->update(['status' => 'CLOSED']);
@@ -266,20 +273,13 @@ class SupervisionPeriodController extends Controller
 
             $term = $this->resolveSelectedSemester($validated['academic_year'], $validated['semester'], $validated['starts_on'], $validated['ends_on']);
             if (! $period) {
-                $duplicateStage = SupervisionPeriod::where('academic_term_id', $term->id)
-                    ->where('name', trim($validated['name']))
-                    ->whereHas('stages', fn ($query) => $query->where('stage_no', $validated['stage_no']))
-                    ->exists();
-                if ($duplicateStage) {
-                    throw ValidationException::withMessages(['stage_no' => 'Tahap ini sudah ada pada periode supervisi.']);
+                $matchingPeriods = SupervisionPeriod::where('academic_term_id', $term->id)->get();
+                if ($matchingPeriods->count() > 1) {
+                    throw ValidationException::withMessages([
+                        'academic_year' => 'Semester ini memiliki beberapa periode lama. Pilih periode yang akan diedit agar tahap tidak tersimpan ke periode yang salah.',
+                    ]);
                 }
-
-                $matchingPeriods = SupervisionPeriod::where('academic_term_id', $term->id)
-                    ->whereHas('stages')
-                    ->whereDoesntHave('stages', fn ($query) => $query->where('stage_no', $validated['stage_no']))
-                    ->get();
-                $period = $matchingPeriods->firstWhere('name', trim($validated['name']))
-                    ?? ($matchingPeriods->count() === 1 ? $matchingPeriods->first() : null);
+                $period = $matchingPeriods->first();
             }
 
             if ($period && $period->academic_term_id !== $term->id) {
@@ -436,6 +436,15 @@ class SupervisionPeriodController extends Controller
         }, 3);
 
         return redirect()->route('lpm.periods.index')->with('success', trim($validated['name']).' berhasil diperbarui.');
+    }
+
+    private function ensureSemesterAvailable(int $academicTermId): void
+    {
+        if (SupervisionPeriod::where('academic_term_id', $academicTermId)->exists()) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Periode supervisi untuk semester dan tahun ajaran ini sudah ada. Gunakan Edit pada periode yang tersedia.',
+            ]);
+        }
     }
 
     private function resolveSelectedSemester(string $academicYear, string $semester, string $startsOn, string $endsOn): AcademicTerm
