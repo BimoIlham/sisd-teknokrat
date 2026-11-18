@@ -7,6 +7,7 @@ use App\Models\SupervisionPeriod;
 use App\Services\Reporting\SupervisionExcelExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -19,6 +20,13 @@ class SupervisionExcelController extends Controller
         if (! $exporter->hasResults($period)) {
             return redirect()->route('lpm.reports.supervision', ['period_id' => $period->id])
                 ->with('error', 'Belum ada hasil supervisi yang sudah dikirim pada semester ini untuk diekspor.');
+        }
+
+        if (! $exporter->isAvailable()) {
+            Log::error('Supervision Excel export unavailable: PhpSpreadsheet is missing from the Composer autoloader. Run composer install with the deployed composer.lock.');
+
+            return redirect()->route('lpm.reports.supervision', ['period_id' => $period->id])
+                ->with('error', 'Ekspor Excel belum siap digunakan. Silakan hubungi administrator untuk menyelesaikan pembaruan aplikasi.');
         }
 
         $workbook = $exporter->build($period);

@@ -9,6 +9,7 @@ use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
 use App\Models\TeachingOccurrence;
 use App\Models\User;
+use App\Services\Reporting\SupervisionExcelExportService;
 use App\Services\Reporting\SupervisionResultPdfService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoAcademicSeeder;
@@ -186,7 +187,23 @@ class SupervisionExcelExportTest extends TestCase
         $response = $this->get(route('lpm.reports.supervision', ['period_id' => $period->id, 'stage' => 2]));
 
         $response->assertSee(route('lpm.reports.supervision.excel', ['period_id' => $period->id]))
-            ->assertSee('Tahap 1 dan 2 pada semester terpilih.');
+            ->assertSee('Ekspor Excel mencakup Tahap 1 dan 2 pada semester terpilih.');
+    }
+
+    public function test_missing_excel_library_redirects_to_the_report_with_a_safe_message(): void
+    {
+        [$admin, $period] = $this->createFixture();
+        $this->createResult($period, $this->createLecturer('Dosen Siap Ekspor'), 1, 4, 4, '-');
+        $exporter = $this->partialMock(SupervisionExcelExportService::class);
+        $exporter->shouldReceive('isAvailable')->once()->andReturn(false);
+        $exporter->shouldNotReceive('build');
+
+        $response = $this->actingAs($admin)->get(route('lpm.reports.supervision.excel', ['period_id' => $period->id]));
+
+        $response->assertRedirect(route('lpm.reports.supervision', ['period_id' => $period->id]))
+            ->assertSessionHas('error', 'Ekspor Excel belum siap digunakan. Silakan hubungi administrator untuk menyelesaikan pembaruan aplikasi.');
+        $this->followRedirects($response)->assertSee('Ekspor Excel belum siap digunakan.')
+            ->assertDontSee('PhpOffice')->assertDontSee('composer install');
     }
 
     public function test_empty_missing_and_invalid_periods_return_clear_responses(): void

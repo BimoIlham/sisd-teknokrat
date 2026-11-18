@@ -17,10 +17,16 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class SupervisionExcelExportService
 {
     public function __construct(private SupervisionResultPdfService $reports) {}
+
+    public function isAvailable(): bool
+    {
+        return class_exists(Spreadsheet::class) && class_exists(Xlsx::class);
+    }
 
     public function hasResults(SupervisionPeriod $period): bool
     {

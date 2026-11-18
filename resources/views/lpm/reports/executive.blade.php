@@ -51,8 +51,8 @@
                 <p class="mt-2 hidden text-xs text-slate-500 print:block">Meningkatkan Kualitas Pembelajaran, Mewujudkan UTI Disiplin, Bermutu, Kreatif, Inovatif</p>
             </div>
 
-            <div class="flex min-w-0 flex-col gap-2 print:hidden lg:flex-row lg:items-end">
-                <form method="GET" action="{{ route($reportRoute) }}" class="filter-controls w-full flex-1" style="--filter-columns: minmax(0,1.6fr) minmax(0,1fr)">
+            <div class="flex min-w-0 flex-wrap items-center gap-2 print:hidden">
+                <form method="GET" action="{{ route($reportRoute) }}" class="filter-controls w-full flex-1" style="flex-basis: 24rem; --filter-columns: minmax(0,1.6fr) minmax(0,1fr)">
                     <label class="filter-field">
                         <span class="sr-only">Semester Supervisi</span>
                         <select name="period_id" @disabled($periods->isEmpty()) onchange="this.form.submit()" class="filter-control">
@@ -73,27 +73,29 @@
                     </label>
                 </form>
 
-                @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
-                    <div class="self-start lg:self-auto">
+                <div class="flex flex-wrap items-center gap-2">
+                    @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
                         @if($canExportExcel)
                             <a href="{{ route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]) }}" class="filter-button">Ekspor Excel (3 Sheet)</a>
                         @else
                             <button type="button" disabled class="filter-button disabled:cursor-not-allowed disabled:opacity-50">Ekspor Excel (3 Sheet)</button>
                         @endif
-                        <p class="mt-1 text-xs text-slate-500">Tahap 1 dan 2 pada semester terpilih.</p>
-                    </div>
-                @endif
+                    @endif
 
-                <button
-                    type="button"
-                    onclick="window.printExecutiveReport()"
-                    title="Ekspor laporan sebagai PDF atau cetak"
-                    class="filter-button self-start lg:self-auto"
-                >
-                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                    Ekspor PDF / Cetak
-                </button>
+                    <button
+                        type="button"
+                        onclick="window.printExecutiveReport()"
+                        title="Ekspor laporan sebagai PDF atau cetak"
+                        class="filter-button"
+                    >
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        Ekspor PDF / Cetak
+                    </button>
+                </div>
             </div>
+            @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
+                <p class="text-xs text-slate-500 print:hidden">Ekspor Excel mencakup Tahap 1 dan 2 pada semester terpilih.</p>
+            @endif
         </div>
     </section>
 
