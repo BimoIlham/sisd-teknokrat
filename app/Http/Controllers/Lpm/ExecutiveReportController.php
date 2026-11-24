@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lpm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Faculty;
 use App\Models\PeriodTarget;
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
@@ -17,10 +18,9 @@ use Illuminate\View\View;
 
 class ExecutiveReportController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, ?Faculty $faculty = null): View
     {
-        $scope = $request->routeIs('unit.*') ? new OrganizationalScope($request->user()) : null;
-        $isLeadershipReport = $request->routeIs('pimpinan.*');
+        $scope = $request->routeIs('unit.*', 'pimpinan.faculties.*') ? OrganizationalScope::forRequest($request) : null;
         $periods = SupervisionPeriod::query()
             ->with(['academicTerm', 'stages'])
             ->latest('starts_on')
@@ -96,9 +96,9 @@ class ExecutiveReportController extends Controller
             'reportLabel' => $selectedPeriod
                 ? ($scope ? $scope->label().' · ' : '').$selectedPeriod->semester_display.' · '.($selectedStage === 'all' ? 'Tahap 1 dan Tahap 2' : 'Tahap '.$selectedStage)
                 : 'Belum ada semester supervisi',
-            'reportRoute' => $request->route()->getName(),
+            'reportUrl' => $scope?->route('reports.supervision') ?? route('lpm.reports.supervision'),
             'publisherLabel' => $scope ? $scope->roleLabel().' '.$scope->label() : 'Lembaga Penjaminan Mutu (LPM)',
-            'isLeadershipReport' => $isLeadershipReport,
+            'scope' => $scope,
             'summary' => $summary,
             'top10T1' => $top10T1,
             'bottom10T1' => $bottom10T1,

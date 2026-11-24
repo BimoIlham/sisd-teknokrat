@@ -64,48 +64,63 @@ class LeadershipPortalAccessTest extends TestCase
 
         $this->post(route('login'), ['email' => $email, 'password' => $temporaryPassword])
             ->assertRedirect(route('password.change'));
-        $this->get(route('pimpinan.reports.supervision'))->assertRedirect(route('password.change'));
+        $this->get(route('pimpinan.faculties.index'))->assertRedirect(route('password.change'));
         $this->post(route('password.update'), [
             'current_password' => $temporaryPassword,
             'password' => 'AmanPimpinan2026!Sandi',
             'password_confirmation' => 'AmanPimpinan2026!Sandi',
-        ])->assertRedirect(route('pimpinan.reports.supervision'));
-        $this->get(route('login'))->assertRedirect(route('pimpinan.reports.supervision'));
+        ])->assertRedirect(route('pimpinan.faculties.index'));
+        $this->get(route('login'))->assertRedirect(route('pimpinan.faculties.index'));
     }
 
-    public function test_leadership_can_read_and_filter_submitted_results_from_multiple_faculties(): void
+    public function test_leadership_can_open_each_faculty_and_filter_its_cohort_and_reports_by_program(): void
     {
         $this->seed(CompleteDemoDataSeeder::class);
         $period = SupervisionPeriod::active()->sole();
-        $firstFaculty = Faculty::where('code', 'FTIK')->sole();
-        $secondFaculty = Faculty::where('code', 'FEB')->sole();
+        $faculties = Faculty::whereIn('code', ['FTIK', 'FEB', 'FSIP'])->get();
+        $faculty = $faculties->firstWhere('code', 'FTIK');
+        $outsideFaculty = $faculties->firstWhere('code', 'FEB');
+        $program = $faculty->studyPrograms()->where('code', 'IF')->sole();
+        $outsideProgram = $outsideFaculty->studyPrograms()->where('code', 'MN')->sole();
         $submitted = Supervision::where('status', 'SUBMITTED')
-            ->whereHas('assignment.supervisionStage', fn ($stages) => $stages->where('supervision_period_id', $period->id));
-        $resultForFaculty = fn (Faculty $faculty): Supervision => (clone $submitted)
-            ->whereHas('assignment.targetLecturer', fn ($lecturers) => $lecturers->where('faculty_id', $faculty->id))
-            ->firstOrFail();
-        $first = $resultForFaculty($firstFaculty);
-        $second = $resultForFaculty($secondFaculty);
+            ->whereHas('assignment.supervisionStage', fn ($stages) => $stages->where('supervision_period_id', $period->id))
+            ->whereHas('assignment.targetLecturer', fn ($lecturers) => $lecturers->where('study_program_id', $program->id));
         $expectedCount = $submitted->count();
+        $result = $submitted->firstOrFail();
+        $lecturer = $result->assignment->targetLecturer;
         $leadership = $this->createAccount('pimpinan');
+        $filters = ['faculty' => $faculty, 'period_id' => $period->id, 'study_program_id' => $program->id];
 
-        $this->actingAs($leadership)->get(route('pimpinan.reports.supervision', ['period_id' => $period->id]))
-            ->assertSee('Ringkasan semua fakultas')
-            ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === $expectedCount)
-            ->assertSee(route('pimpinan.supervisions.index', ['period_id' => $period->id, 'stage' => 'all']))
-            ->assertDontSee('Ekspor Excel');
-
-        foreach ([$first, $second] as $result) {
-            $lecturer = $result->assignment->targetLecturer;
-            $this->get(route('pimpinan.supervisions.index', [
-                'period_id' => $period->id, 'faculty_id' => $lecturer->faculty_id, 'stage' => 1,
-            ]))->assertSee(route('pimpinan.supervisions.pdf', $result), false)
-                ->assertViewHas('supervisedLecturers', fn ($page): bool => $page->isNotEmpty()
-                    && $page->every(fn ($row): bool => $row->faculty_id === $lecturer->faculty_id));
-            $this->get(route('pimpinan.supervisions.pdf', $result))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $directory = $this->actingAs($leadership)->get(route('pimpinan.faculties.index'))->assertOk();
+        foreach ($faculties as $listedFaculty) {
+            $directory->assertSee($listedFaculty->name)->assertSee(route('pimpinan.faculties.dashboard', $listedFaculty));
+            $this->get(route('pimpinan.faculties.dashboard', $listedFaculty))->assertOk()
+                ->assertSee('Dashboard '.$listedFaculty->name)
+                ->assertSee(route('pimpinan.faculties.analytics.index', ['faculty' => $listedFaculty, 'period_id' => $period->id]));
         }
-        $this->get(route('pimpinan.supervisions.index', ['period_id' => $period->id, 'stage' => 2]))
-            ->assertViewHas('supervisedLecturers', fn ($page): bool => $page->total() === 0);
+        $this->get(route('pimpinan.supervisions.index'))->assertRedirect(route('pimpinan.faculties.index'));
+
+        $this->get(route('pimpinan.faculties.dashboard', $filters))->assertOk()->assertViewHas('submittedCount', $expectedCount);
+        $this->get(route('pimpinan.faculties.analytics.index', $filters))->assertOk()->assertSee('Analisis Kohort T1/T2')
+            ->assertSee($lecturer->name)->assertSee($program->name)->assertDontSee($outsideProgram->name)
+            ->assertViewHas('analytics', fn (array $analytics): bool => collect($analytics['stage_results'])->isNotEmpty()
+                && collect($analytics['stage_results'])->every(fn (array $row): bool => $row['prodi'] === $program->name));
+        $this->get(route('pimpinan.faculties.reports.supervision', $filters))->assertOk()
+            ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === $expectedCount)
+            ->assertDontSee('Ekspor Excel');
+        $this->get(route('pimpinan.faculties.lecturers.index', $filters))->assertOk()
+            ->assertSee(route('pimpinan.faculties.lecturers.show', $filters + ['lecturer' => $lecturer]))
+            ->assertDontSee($outsideProgram->name)->assertDontSee('Tambah Dosen');
+        $this->get(route('pimpinan.faculties.lecturers.show', $filters + ['lecturer' => $lecturer]))->assertOk()
+            ->assertSee(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $faculty, 'supervision' => $result, 'study_program_id' => $program->id]))
+            ->assertDontSee('Tambah Jadwal');
+        $this->get(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $faculty, 'supervision' => $result]))->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->get(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $outsideFaculty, 'supervision' => $result]))->assertNotFound();
+        $this->get(route('pimpinan.faculties.lecturers.show', ['faculty' => $outsideFaculty, 'lecturer' => $lecturer]))->assertNotFound();
+        foreach (['dashboard', 'analytics.index', 'reports.supervision', 'lecturers.index'] as $section) {
+            $this->get(route('pimpinan.faculties.'.$section, ['faculty' => $faculty, 'study_program_id' => $outsideProgram->id]))->assertNotFound();
+        }
     }
 
     public function test_leadership_cannot_access_drafts_cancelled_results_or_admin_actions(): void
@@ -117,11 +132,12 @@ class LeadershipPortalAccessTest extends TestCase
         $cancelled->assignment->update(['status' => 'CANCELLED']);
         $leadership = $this->createAccount('pimpinan');
 
-        $this->actingAs($leadership)->get(route('pimpinan.supervisions.index', [
-            'period_id' => $period->id, 'status' => 'draft', 'search' => $draft->assignment->targetLecturer->name,
-        ]))->assertViewHas('supervisedLecturers', fn ($page): bool => $page->total() === 0);
-        $this->get(route('pimpinan.supervisions.pdf', $draft))->assertForbidden();
-        $this->get(route('pimpinan.supervisions.pdf', $cancelled))->assertForbidden();
+        $this->actingAs($leadership)->get(route('pimpinan.faculties.supervisions.pdf', [
+            'faculty' => $draft->assignment->targetLecturer->faculty_id, 'supervision' => $draft,
+        ]))->assertForbidden();
+        $this->get(route('pimpinan.faculties.supervisions.pdf', [
+            'faculty' => $cancelled->assignment->targetLecturer->faculty_id, 'supervision' => $cancelled,
+        ]))->assertForbidden();
         $this->get(route('lpm.dashboard'))->assertForbidden();
         $this->get(route('lpm.reports.supervision.excel', ['period_id' => $period->id]))->assertForbidden();
         $this->post(route('lpm.unit_accounts.store'), ['role' => 'pimpinan'])->assertForbidden();
@@ -137,8 +153,7 @@ class LeadershipPortalAccessTest extends TestCase
         $this->seed(RoleAndPermissionSeeder::class);
         $account = $this->createAccount($role);
 
-        $this->actingAs($account)->get(route('pimpinan.reports.supervision'))->assertForbidden();
-        $this->get(route('pimpinan.supervisions.index'))->assertForbidden();
+        $this->actingAs($account)->get(route('pimpinan.faculties.index'))->assertForbidden();
     }
 
     private function createAccount(string $role): User

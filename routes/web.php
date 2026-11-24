@@ -21,6 +21,7 @@ use App\Http\Controllers\Supervisor\AssignmentLetterController;
 use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardController;
 use App\Http\Controllers\Supervisor\PersonalScheduleController;
 use App\Http\Controllers\Supervisor\SupervisionExecutionController;
+use App\Http\Controllers\Unit\LeadershipFacultyController;
 use App\Http\Controllers\Unit\UnitAnalyticsController;
 use App\Http\Controllers\Unit\UnitDashboardController;
 use Illuminate\Support\Facades\Route;
@@ -145,10 +146,19 @@ Route::middleware(['auth', 'role:lpm_admin'])->prefix('lpm/unit-accounts')->name
 });
 
 Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan.')->group(function () {
-    Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
-    Route::get('/supervisions', [SupervisedLecturerController::class, 'index'])->name('supervisions.index');
-    Route::get('/supervisions/{supervision}/pdf', [LecturerDirectoryController::class, 'downloadSupervisionPdf'])
-        ->middleware('throttle:report-exports')->name('supervisions.pdf');
+    Route::get('/faculties', [LeadershipFacultyController::class, 'index'])->name('faculties.index');
+    Route::get('/reports/supervision', [LeadershipFacultyController::class, 'redirectToFaculties'])->name('reports.supervision');
+    Route::get('/supervisions', [LeadershipFacultyController::class, 'redirectToFaculties'])->name('supervisions.index');
+
+    Route::prefix('faculties/{faculty}')->name('faculties.')->group(function () {
+        Route::get('/', [UnitDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');
+        Route::get('/lecturers/{lecturer}', [LeadershipFacultyController::class, 'showLecturer'])->name('lecturers.show');
+        Route::get('/supervisions/{supervision}/pdf', [LeadershipFacultyController::class, 'downloadResult'])
+            ->middleware('throttle:report-exports')->name('supervisions.pdf');
+        Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
+        Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    });
 });
 
 Route::middleware(['auth', 'role:fakultas|prodi'])->prefix('unit')->name('unit.')->group(function () {

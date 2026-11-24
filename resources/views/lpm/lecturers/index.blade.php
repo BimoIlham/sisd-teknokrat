@@ -18,7 +18,7 @@
 
     <!-- Search & Filter Bar -->
     <div class="filter-bar space-y-2">
-        <form method="GET" action="{{ route($isUnit ? 'unit.lecturers.index' : 'lpm.lecturers.index') }}" class="filter-controls" style="--filter-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto">
+        <form method="GET" action="{{ $scope?->route('lecturers.index') ?? route('lpm.lecturers.index') }}" class="filter-controls" style="--filter-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto">
             <!-- Search Text -->
             <div class="filter-search">
                 <svg class="filter-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -27,7 +27,7 @@
 
             <!-- Filter Fakultas -->
             <div class="filter-field">
-                @if($isUnit && $scope->studyProgramId() === null)
+                @if($isUnit && ($scope->isLeadershipFaculty() || $scope->studyProgramId() === null))
                 <select name="study_program_id" aria-label="Program Studi" onchange="this.form.submit()" class="filter-control">
                     <option value="">Semua Program Studi</option>
                     @foreach($unitPrograms as $program)
@@ -67,7 +67,7 @@
             <div class="filter-actions">
                 <button type="submit" title="Terapkan Filter" class="filter-button">Filter</button>
                 @if(request('search') || request('faculty') || request('study_program_id') || (request('completion') && request('completion') !== 'all'))
-                    <a href="{{ route($isUnit ? 'unit.lecturers.index' : 'lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" title="Reset Filter" aria-label="Reset Filter" class="filter-reset">
+                    <a href="{{ $scope?->route('lecturers.index', ['period_id' => $selectedPeriod?->id, 'study_program_id' => null]) ?? route('lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" title="Reset Filter" aria-label="Reset Filter" class="filter-reset">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </a>
                 @endif
@@ -169,7 +169,7 @@
                                         <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                     </button>
                                     @endunless
-                                    <a href="{{ route($isUnit ? 'unit.lecturers.show' : 'lpm.lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) }}" aria-label="Lihat detail dosen {{ $lecturer->name }}" title="Lihat detail dosen {{ $lecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]">
+                                    <a href="{{ $scope?->route('lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) ?? route('lpm.lecturers.show', ['lecturer' => $lecturer, 'period_id' => $selectedPeriod?->id]) }}" aria-label="Lihat detail dosen {{ $lecturer->name }}" title="Lihat detail dosen {{ $lecturer->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#7B1113] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B1113]">
                                         <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6.75 9.75-6.75S21.75 12 21.75 12s-3.5 6.75-9.75 6.75S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="2.5" stroke-width="2" /></svg>
                                     </a>
                                     @unless($isUnit)

@@ -17,7 +17,6 @@ class SupervisedLecturerController extends Controller
 {
     public function index(Request $request): View
     {
-        $isLeadershipReport = $request->routeIs('pimpinan.*');
         $periods = SupervisionPeriod::query()
             ->with(['academicTerm', 'stages'])
             ->orderByDesc('starts_on')
@@ -28,27 +27,27 @@ class SupervisedLecturerController extends Controller
         abort_if($request->filled('period_id') && ! $selectedPeriod, 404);
 
         $faculties = Faculty::query()
-            ->when(! $isLeadershipReport, fn (Builder $query): Builder => $query->where('is_active', true))
+            ->where('is_active', true)
             ->orderBy('name')
             ->get();
         $selectedFacultyId = $request->integer('faculty_id') ?: null;
         $selectedProgramId = $request->integer('study_program_id') ?: null;
         $requestedStage = (string) $request->input('stage', 'all');
         $selectedStage = in_array($requestedStage, ['1', '2'], true) ? $requestedStage : 'all';
-        $requestedStatus = $isLeadershipReport ? 'submitted' : (string) $request->input('status', $request->routeIs('lpm.supervisions.completed') ? 'submitted' : 'all');
+        $requestedStatus = (string) $request->input('status', $request->routeIs('lpm.supervisions.completed') ? 'submitted' : 'all');
         $selectedStatus = in_array($requestedStatus, ['not_supervised', 'draft', 'submitted'], true) ? $requestedStatus : 'all';
         $showUnfinishedTasks = $requestedStatus === 'pending';
         $statusFilter = $showUnfinishedTasks ? 'pending' : $selectedStatus;
-        $selectedSupervisorId = $isLeadershipReport ? null : ($request->integer('supervisor_id') ?: null);
+        $selectedSupervisorId = $request->integer('supervisor_id') ?: null;
         $stageNumbers = $selectedPeriod?->stages->pluck('stage_no')->all() ?? [];
-        $supervisors = $isLeadershipReport ? collect() : Lecturer::query()
+        $supervisors = Lecturer::query()
             ->whereHas('assignmentsAsSupervisor', fn (Builder $query): Builder => $query
                 ->where('status', '<>', 'CANCELLED')
                 ->whereHas('supervisionStage', fn (Builder $stageQuery): Builder => $stageQuery->where('supervision_period_id', $selectedPeriod?->id)))
             ->orderBy('name')->get(['id', 'name']);
         $search = trim((string) $request->input('search', ''));
         $studyPrograms = StudyProgram::query()
-            ->when(! $isLeadershipReport, fn (Builder $query): Builder => $query->where('is_active', true))
+            ->where('is_active', true)
             ->when($selectedFacultyId, fn (Builder $query): Builder => $query->where('faculty_id', $selectedFacultyId))
             ->with('faculty:id,code')
             ->orderBy('name')
@@ -102,11 +101,9 @@ class SupervisedLecturerController extends Controller
         $supervisedLecturers = $query->with([
             'faculty',
             'studyProgram',
-            'assignmentsAsTarget' => function (HasMany $query) use ($selectedPeriod, $isLeadershipReport, $selectedStage): void {
+            'assignmentsAsTarget' => function (HasMany $query) use ($selectedPeriod): void {
                 $query->where('status', '<>', 'CANCELLED')
-                    ->whereHas('supervisionStage', fn (Builder $stageQuery): Builder => $stageQuery
-                        ->where('supervision_period_id', $selectedPeriod?->id)
-                        ->when($isLeadershipReport && $selectedStage !== 'all', fn (Builder $stages): Builder => $stages->where('stage_no', (int) $selectedStage)))
+                    ->whereHas('supervisionStage', fn (Builder $stageQuery): Builder => $stageQuery->where('supervision_period_id', $selectedPeriod?->id))
                     ->with([
                         'supervisorLecturer',
                         'supervisionStage',
@@ -114,9 +111,6 @@ class SupervisedLecturerController extends Controller
                             $relation->getQuery()->withExists(['answers' => $this->filledAnswers(...)]);
                         },
                     ]);
-                if ($isLeadershipReport) {
-                    $this->constrainStatus($query->getQuery(), 'submitted');
-                }
             },
         ])
             ->orderBy('name')
@@ -125,7 +119,6 @@ class SupervisedLecturerController extends Controller
             ->withQueryString();
 
         return view('lpm.supervisions.completed', compact(
-            'isLeadershipReport',
             'periods',
             'selectedPeriod',
             'faculties',

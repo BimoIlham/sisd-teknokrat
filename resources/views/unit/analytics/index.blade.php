@@ -6,15 +6,18 @@
         <p class="text-xs font-bold uppercase tracking-wider text-[#7B1113]">{{ $scope->roleLabel() }} {{ $scope->label() }}</p>
         <h1 class="mt-1 text-2xl font-bold text-slate-900">Analisis Kohort T1/T2</h1>
         <p class="mt-1 text-sm text-slate-600">Hasil dosen pada unit ini saja.</p>
-        <form method="GET" action="{{ route('unit.analytics.index') }}" class="mt-4">
+        <form method="GET" action="{{ $scope->route('analytics.index') }}" class="mt-4 space-y-2">
             <label for="period_id" class="sr-only">Periode supervisi</label>
-            <select id="period_id" name="period_id" onchange="this.form.submit()" class="w-full max-w-sm rounded-xl border border-slate-300 px-3 py-2 text-sm">
+            <select id="period_id" name="period_id" onchange="this.form.submit()" @disabled($periods->isEmpty()) class="w-full max-w-sm rounded-xl border border-slate-300 px-3 py-2 text-sm">
                 @forelse ($periods as $availablePeriod)
                     <option value="{{ $availablePeriod->id }}" @selected($period?->id === $availablePeriod->id)>{{ $availablePeriod->semester_display }}</option>
                 @empty
                     <option>Belum ada periode supervisi</option>
                 @endforelse
             </select>
+            @if($scope->isLeadershipFaculty())
+                <div class="max-w-sm">@include('unit.program-filter')</div>
+            @endif
         </form>
     </header>
     @if ($period)

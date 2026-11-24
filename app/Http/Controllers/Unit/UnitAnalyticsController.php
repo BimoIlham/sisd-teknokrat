@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Unit;
 
 use App\Http\Controllers\Controller;
+use App\Models\Faculty;
 use App\Models\SupervisionPeriod;
 use App\Services\Analytics\SupervisionAnalyticsService;
 use App\Services\OrganizationalScope;
@@ -11,9 +12,9 @@ use Illuminate\View\View;
 
 class UnitAnalyticsController extends Controller
 {
-    public function index(Request $request, SupervisionAnalyticsService $analyticsService): View
+    public function index(Request $request, SupervisionAnalyticsService $analyticsService, ?Faculty $faculty = null): View
     {
-        $scope = new OrganizationalScope($request->user());
+        $scope = OrganizationalScope::forRequest($request);
         $periods = SupervisionPeriod::with(['academicTerm', 'stages'])->latest('starts_on')->get();
         $period = $request->filled('period_id')
             ? $periods->firstWhere('id', $request->integer('period_id'))

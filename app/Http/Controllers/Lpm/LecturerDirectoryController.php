@@ -39,10 +39,10 @@ class LecturerDirectoryController extends Controller
     /**
      * Display the full list of lecturers with summary metrics.
      */
-    public function index(Request $request): View
+    public function index(Request $request, ?Faculty $faculty = null): View
     {
-        $isUnit = $request->routeIs('unit.*');
-        $scope = $isUnit ? new OrganizationalScope($request->user()) : null;
+        $isUnit = $request->routeIs('unit.*', 'pimpinan.faculties.*');
+        $scope = $isUnit ? OrganizationalScope::forRequest($request) : null;
         $periods = SupervisionPeriod::with('academicTerm')->latest('starts_on')->get();
         $selectedPeriod = $request->filled('period_id')
             ? $periods->firstWhere('id', $request->integer('period_id'))
@@ -73,9 +73,10 @@ class LecturerDirectoryController extends Controller
         if ($facultyFilter) {
             $query->where('faculty_id', $facultyFilter);
         }
-        $selectedProgram = $scope && $scope->studyProgramId() === null ? $request->input('study_program_id') : null;
-        if ($selectedProgram) {
-            abort_unless(StudyProgram::whereKey($selectedProgram)->where('faculty_id', $scope->facultyId())->exists(), 404);
+        $selectedProgram = $scope?->isLeadershipFaculty() ? $scope->studyProgramId() : null;
+        if ($scope && ! $scope->isLeadershipFaculty() && $scope->studyProgramId() === null && $request->filled('study_program_id')) {
+            $selectedProgram = $request->integer('study_program_id');
+            abort_unless($scope->programs()->contains('id', $selectedProgram), 404);
             $query->where('study_program_id', $selectedProgram);
         }
 
@@ -115,8 +116,8 @@ class LecturerDirectoryController extends Controller
             ->groupBy('faculty_id');
 
         $selectedFaculty = $facultyFilter;
-        $unitPrograms = $scope && $scope->studyProgramId() === null
-            ? StudyProgram::where('faculty_id', $scope->facultyId())->orderBy('name')->get()
+        $unitPrograms = $scope && ($scope->isLeadershipFaculty() || $scope->studyProgramId() === null)
+            ? $scope->programs()
             : collect();
 
         return view('lpm.lecturers.index', compact(
@@ -337,8 +338,8 @@ class LecturerDirectoryController extends Controller
      */
     public function show(Request $request, Lecturer $lecturer, WeeklySupervisionScheduleGrouper $scheduleGrouper): View
     {
-        $isUnit = $request->routeIs('unit.*');
-        $scope = $isUnit ? new OrganizationalScope($request->user()) : null;
+        $isUnit = $request->routeIs('unit.*', 'pimpinan.faculties.*');
+        $scope = $isUnit ? OrganizationalScope::forRequest($request) : null;
         $lecturer->load(['faculty', 'studyProgram']);
         $periods = SupervisionPeriod::with('academicTerm')->latest('starts_on')->get();
         $selectedPeriod = $request->filled('period_id')
@@ -677,7 +678,8 @@ class LecturerDirectoryController extends Controller
             'comparisons',
             'avgScore',
             'findings',
-            'isUnit'
+            'isUnit',
+            'scope',
         ));
     }
 

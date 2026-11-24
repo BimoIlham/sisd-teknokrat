@@ -6,6 +6,8 @@ use App\Models\Faculty;
 use App\Models\StudyProgram;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\Request;
 
 class OrganizationalScope
 {
@@ -15,8 +17,21 @@ class OrganizationalScope
 
     private readonly string $label;
 
-    public function __construct(User $user)
+    public function __construct(User $user, private readonly ?Faculty $leadershipFaculty = null, ?int $programId = null)
     {
+        if ($leadershipFaculty) {
+            abort_unless($user->isLeadership(), 403);
+            abort_unless($leadershipFaculty->is_active, 404);
+            if ($programId !== null) {
+                abort_unless($leadershipFaculty->studyPrograms()->whereKey($programId)->exists(), 404);
+            }
+            $this->facultyId = $leadershipFaculty->id;
+            $this->studyProgramId = $programId;
+            $this->label = $leadershipFaculty->name;
+
+            return;
+        }
+
         if ($user->hasRole('prodi') && ! $user->hasRole('fakultas')) {
             $program = StudyProgram::query()->where('is_active', true)
                 ->whereHas('faculty', fn (Builder $query): Builder => $query->where('is_active', true))
@@ -42,6 +57,41 @@ class OrganizationalScope
         abort(403, 'Akun ini tidak memiliki cakupan unit yang valid.');
     }
 
+    public static function forRequest(Request $request): self
+    {
+        return new self(
+            $request->user(),
+            $request->route('faculty'),
+            $request->routeIs('pimpinan.faculties.*') && $request->filled('study_program_id')
+                ? $request->integer('study_program_id')
+                : null,
+        );
+    }
+
+    public function isLeadershipFaculty(): bool
+    {
+        return $this->leadershipFaculty !== null;
+    }
+
+    /** @return Collection<int, StudyProgram> */
+    public function programs(): Collection
+    {
+        return StudyProgram::where('faculty_id', $this->facultyId)->orderBy('name')->get();
+    }
+
+    /** @param array<string, mixed> $parameters */
+    public function route(string $name, array $parameters = []): string
+    {
+        if ($this->leadershipFaculty) {
+            return route('pimpinan.faculties.'.$name, $parameters + [
+                'faculty' => $this->leadershipFaculty,
+                'study_program_id' => $this->studyProgramId,
+            ]);
+        }
+
+        return route('unit.'.$name, $parameters);
+    }
+
     public function facultyId(): int
     {
         return $this->facultyId;
@@ -59,7 +109,7 @@ class OrganizationalScope
 
     public function roleLabel(): string
     {
-        return $this->studyProgramId ? 'Program Studi' : 'Fakultas';
+        return $this->studyProgramId && ! $this->isLeadershipFaculty() ? 'Program Studi' : 'Fakultas';
     }
 
     public function lecturers(Builder $query): Builder

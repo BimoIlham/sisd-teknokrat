@@ -7,7 +7,10 @@
 @endphp
 <div class="space-y-6">
     @if($periods->isNotEmpty())
-        <form method="GET" action="{{ route($isUnit ? 'unit.lecturers.show' : 'lpm.lecturers.show', $lecturer) }}" class="filter-bar flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+        <form method="GET" action="{{ $scope?->route('lecturers.show', ['lecturer' => $lecturer]) ?? route('lpm.lecturers.show', $lecturer) }}" class="filter-bar flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+            @if($scope?->isLeadershipFaculty() && $scope->studyProgramId())
+                <input type="hidden" name="study_program_id" value="{{ $scope->studyProgramId() }}">
+            @endif
             <label for="lecturer-period" class="filter-field shrink-0">Semester Supervisi</label>
             <select id="lecturer-period" name="period_id" onchange="this.form.submit()" class="filter-control lg:max-w-sm">
                 @foreach($periods as $availablePeriod)
@@ -21,7 +24,7 @@
     <!-- Back Link + Header -->
     <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div class="flex items-start gap-4">
-            <a href="{{ route($isUnit ? 'unit.lecturers.index' : 'lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" class="mt-1 p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-[#7B1113] transition-colors shrink-0" title="Kembali ke Direktori">
+            <a href="{{ $scope?->route('lecturers.index', ['period_id' => $selectedPeriod?->id]) ?? route('lpm.lecturers.index', ['period_id' => $selectedPeriod?->id]) }}" class="mt-1 p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-[#7B1113] transition-colors shrink-0" title="Kembali ke Direktori">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </a>
             <div>
@@ -68,13 +71,13 @@
             @if($submittedT1Supervision || $submittedT2Supervision)
                 <div class="mt-3 flex flex-wrap justify-center gap-2 border-t border-slate-100 pt-3">
                     @if($submittedT1Supervision)
-                        <a href="{{ route($isUnit ? 'unit.supervisions.pdf' : 'lpm.supervisions.pdf', $submittedT1Supervision) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg bg-[#7B1113] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5A0E13]">
+                        <a href="{{ $scope?->route('supervisions.pdf', ['supervision' => $submittedT1Supervision]) ?? route('lpm.supervisions.pdf', $submittedT1Supervision) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg bg-[#7B1113] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5A0E13]">
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             Cetak PDF Nilai T1
                         </a>
                     @endif
                     @if($submittedT2Supervision)
-                        <a href="{{ route($isUnit ? 'unit.supervisions.pdf' : 'lpm.supervisions.pdf', $submittedT2Supervision) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg bg-[#7B1113] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5A0E13]">
+                        <a href="{{ $scope?->route('supervisions.pdf', ['supervision' => $submittedT2Supervision]) ?? route('lpm.supervisions.pdf', $submittedT2Supervision) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg bg-[#7B1113] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#5A0E13]">
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             Cetak PDF Nilai T2
                         </a>
@@ -491,7 +494,7 @@
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         @if($a->supervision?->status === 'SUBMITTED')
-                                            <a href="{{ route($isUnit ? 'unit.supervisions.pdf' : 'lpm.supervisions.pdf', $a->supervision->id) }}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-[#7B1113] font-semibold text-xs border border-slate-200 transition-colors" title="Unduh Lembar Hasil PDF">
+                                            <a href="{{ $scope?->route('supervisions.pdf', ['supervision' => $a->supervision->id]) ?? route('lpm.supervisions.pdf', $a->supervision->id) }}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-[#7B1113] font-semibold text-xs border border-slate-200 transition-colors" title="Unduh Lembar Hasil PDF">
                                                 <svg class="w-3.5 h-3.5 text-[#7B1113]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                                 PDF
                                             </a>
@@ -566,7 +569,7 @@
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         @if($a->supervision?->status === 'SUBMITTED')
-                                            <a href="{{ route($isUnit ? 'unit.supervisions.pdf' : 'lpm.supervisions.pdf', $a->supervision->id) }}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-[#7B1113] font-semibold text-xs border border-slate-200 transition-colors" title="Unduh Lembar Hasil PDF">
+                                            <a href="{{ $scope?->route('supervisions.pdf', ['supervision' => $a->supervision->id]) ?? route('lpm.supervisions.pdf', $a->supervision->id) }}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-[#7B1113] font-semibold text-xs border border-slate-200 transition-colors" title="Unduh Lembar Hasil PDF">
                                                 <svg class="w-3.5 h-3.5 text-[#7B1113]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                                 PDF
                                             </a>

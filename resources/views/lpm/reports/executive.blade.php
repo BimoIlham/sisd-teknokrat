@@ -48,14 +48,11 @@
                 </h1>
 
                 <p class="mt-1 text-sm font-medium text-slate-600">{{ $reportLabel }}</p>
-                @if($isLeadershipReport)
-                    <p class="mt-1 text-sm text-slate-600 print:hidden">Ringkasan semua fakultas</p>
-                @endif
                 <p class="mt-2 hidden text-xs text-slate-500 print:block">Meningkatkan Kualitas Pembelajaran, Mewujudkan UTI Disiplin, Bermutu, Kreatif, Inovatif</p>
             </div>
 
             <div class="flex min-w-0 flex-wrap items-center gap-2 print:hidden">
-                <form method="GET" action="{{ route($reportRoute) }}" class="filter-controls w-full flex-1" style="flex-basis: 24rem; --filter-columns: minmax(0,1.6fr) minmax(0,1fr)">
+                <form method="GET" action="{{ $reportUrl }}" class="filter-controls w-full flex-1" style="flex-basis: 24rem; --filter-columns: {{ $scope?->isLeadershipFaculty() ? 'minmax(0,1.6fr) repeat(2,minmax(0,1fr))' : 'minmax(0,1.6fr) minmax(0,1fr)' }}">
                     <label class="filter-field">
                         <span class="sr-only">Semester Supervisi</span>
                         <select name="period_id" @disabled($periods->isEmpty()) onchange="this.form.submit()" class="filter-control">
@@ -74,12 +71,12 @@
                             <option value="2" @selected($selectedStage === '2')>Tahap 2</option>
                         </select>
                     </label>
+                    @if($scope?->isLeadershipFaculty())
+                        @include('unit.program-filter')
+                    @endif
                 </form>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    @if($isLeadershipReport)
-                        <a href="{{ route('pimpinan.supervisions.index', ['period_id' => $selectedPeriod?->id, 'stage' => $selectedStage]) }}" class="filter-button">Lihat Hasil per Dosen</a>
-                    @endif
                     @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
                         @if($canExportExcel)
                             <a href="{{ route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]) }}" class="filter-button">Ekspor Excel (3 Sheet)</a>
