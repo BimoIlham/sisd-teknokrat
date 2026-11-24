@@ -9,15 +9,19 @@
     @if ($errors->any())
         <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{{ $errors->first() }}</div>
     @endif
+    @unless($leadershipRoleAvailable)
+        <p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Akun Pimpinan tersedia setelah migrasi peran dijalankan.</p>
+    @endunless
     @php
         $facultyOptions = $faculties->map(fn ($faculty) => ['id' => $faculty->id, 'code' => $faculty->code, 'name' => $faculty->name])->values();
         $studyProgramOptions = $studyPrograms->map(fn ($program) => ['id' => $program->id, 'code' => $program->code, 'name' => $program->name, 'faculty_code' => $program->faculty?->code])->values();
-        $initialAccount = ['role' => old('role', 'fakultas'), 'facultyId' => old('faculty_id', ''), 'studyProgramId' => old('study_program_id', ''), 'name' => old('name', ''), 'email' => old('email', '')];
+        $initialRole = old('role', 'fakultas');
+        $initialAccount = ['role' => $initialRole === 'pimpinan' && ! $leadershipRoleAvailable ? 'fakultas' : $initialRole, 'facultyId' => old('faculty_id', ''), 'studyProgramId' => old('study_program_id', ''), 'name' => old('name', ''), 'email' => old('email', '')];
     @endphp
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" x-data="unitAccountCreator(@js($facultyOptions), @js($studyProgramOptions), @js($initialAccount))">
         <h2 class="mb-4 text-lg font-semibold text-slate-900">Buat akun</h2>
         <form method="POST" action="{{ route('lpm.unit_accounts.store') }}" class="grid gap-3 sm:grid-cols-2">@csrf
-            <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option><option value="pimpinan">Pimpinan / Wakil Rektor</option></select></label>
+            <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option><option value="pimpinan" @disabled(! $leadershipRoleAvailable)>Pimpinan / Wakil Rektor</option></select></label>
             <label x-show="role === 'fakultas'" class="text-sm font-medium text-slate-700">Fakultas<select name="faculty_id" x-model="facultyId" :disabled="role !== 'fakultas'" :required="role === 'fakultas'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih fakultas</option>@foreach ($faculties as $faculty)<option value="{{ $faculty->id }}" @disabled($facultyCounts->get($faculty->id, 0) > 0)>{{ $faculty->name }}{{ $facultyCounts->get($faculty->id, 0) > 0 ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>
             <label x-show="role === 'prodi'" x-cloak class="text-sm font-medium text-slate-700">Program studi<select name="study_program_id" x-model="studyProgramId" :disabled="role !== 'prodi'" :required="role === 'prodi'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih program studi</option>@foreach ($studyPrograms as $program)<option value="{{ $program->id }}" @disabled($programCounts->get($program->id, 0) > 0)>{{ $program->name }} · {{ $program->faculty?->name }}{{ $programCounts->get($program->id, 0) > 0 ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>
             <label class="text-sm font-medium text-slate-700">Nama pengguna<input name="name" x-model="name" required maxlength="255" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></label>
@@ -49,7 +53,7 @@
                     <option value="all" @selected($roleFilter === 'all')>Semua</option>
                     <option value="fakultas" @selected($roleFilter === 'fakultas')>Fakultas</option>
                     <option value="prodi" @selected($roleFilter === 'prodi')>Prodi</option>
-                    <option value="pimpinan" @selected($roleFilter === 'pimpinan')>Pimpinan / Wakil Rektor</option>
+                    <option value="pimpinan" @selected($roleFilter === 'pimpinan') @disabled(! $leadershipRoleAvailable)>Pimpinan / Wakil Rektor</option>
                 </select>
             </form>
         </div>

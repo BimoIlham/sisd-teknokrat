@@ -8,6 +8,7 @@ use App\Models\StudyProgram;
 use App\Models\SystemAudit;
 use App\Models\User;
 use App\Services\CredentialSessionRevoker;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Spatie\Permission\Models\Role;
 
 class UnitAccountController extends Controller
 {
@@ -25,16 +27,19 @@ class UnitAccountController extends Controller
     {
         $roleFilter = in_array($request->query('role'), self::ACCOUNT_ROLES, true)
             ? $request->query('role') : 'all';
-        $users = User::role($roleFilter === 'all' ? self::ACCOUNT_ROLES : $roleFilter)
+        $filterRoles = $roleFilter === 'all' ? self::ACCOUNT_ROLES : [$roleFilter];
+        $users = User::whereHas('roles', fn (Builder $roles): Builder => $roles
+            ->where('guard_name', 'web')->whereIn('name', $filterRoles))
             ->has('roles', '=', 1)->with(['roles', 'faculty', 'studyProgram.faculty'])
             ->orderBy('name')->orderBy('id')->paginate(20)->withQueryString();
+        $leadershipRoleAvailable = Role::where('name', 'pimpinan')->where('guard_name', 'web')->exists();
         $faculties = Faculty::where('is_active', true)->orderBy('name')->get();
         $studyPrograms = StudyProgram::where('is_active', true)
             ->whereHas('faculty', fn ($query) => $query->where('is_active', true))
             ->with('faculty:id,code,name')->orderBy('name')->get();
         [$facultyCounts, $programCounts] = $this->accountCounts();
 
-        return view('lpm.unit-accounts.index', compact('users', 'faculties', 'studyPrograms', 'roleFilter', 'facultyCounts', 'programCounts'));
+        return view('lpm.unit-accounts.index', compact('users', 'faculties', 'studyPrograms', 'roleFilter', 'facultyCounts', 'programCounts', 'leadershipRoleAvailable'));
     }
 
     public function show(User $user): View
@@ -154,11 +159,11 @@ class UnitAccountController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
-            'role' => ['required', Rule::in($assignableRoles)],
+            'role' => ['bail', 'required', 'string', Rule::in($assignableRoles), Rule::exists(Role::class, 'name')->where('guard_name', 'web')],
             'faculty_id' => ['nullable', 'integer'],
             'study_program_id' => ['nullable', 'integer'],
             'is_active' => [$user ? 'required' : 'sometimes', 'boolean'],
-        ]);
+        ], ['role.exists' => 'Peran ini belum tersedia. Hubungi pengelola sistem untuk menyelesaikan pembaruan aplikasi.']);
 
         $facultyId = null;
         $studyProgramId = null;

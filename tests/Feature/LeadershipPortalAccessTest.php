@@ -10,11 +10,32 @@ use Database\Seeders\CompleteDemoDataSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\TestWith;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class LeadershipPortalAccessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_unit_accounts_remain_available_before_the_leadership_role_is_installed(): void
+    {
+        $this->seed(RoleAndPermissionSeeder::class);
+        Role::findByName('pimpinan', 'web')->delete();
+        $admin = $this->createAccount('lpm_admin');
+        $facultyAccount = $this->createAccount('fakultas');
+        $accountsUrl = route('lpm.unit_accounts.index');
+
+        $this->actingAs($admin)->get($accountsUrl)->assertOk()
+            ->assertSee($facultyAccount->email)
+            ->assertSee('Akun Pimpinan tersedia setelah migrasi peran dijalankan.')
+            ->assertSee('<option value="pimpinan" disabled>', false);
+        $this->get(route('lpm.unit_accounts.index', ['role' => 'pimpinan']))
+            ->assertOk()->assertDontSee($facultyAccount->email);
+        $this->from($accountsUrl)->post(route('lpm.unit_accounts.store'), [
+            'role' => 'pimpinan', 'name' => 'Wakil Rektor', 'email' => 'pending@example.test',
+        ])->assertRedirect($accountsUrl)->assertSessionHasErrors('role');
+        $this->assertDatabaseMissing('users', ['email' => 'pending@example.test']);
+    }
 
     public function test_lpm_can_create_a_leadership_account_that_opens_the_report_after_password_change(): void
     {
