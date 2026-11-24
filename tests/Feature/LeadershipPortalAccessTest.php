@@ -64,13 +64,13 @@ class LeadershipPortalAccessTest extends TestCase
 
         $this->post(route('login'), ['email' => $email, 'password' => $temporaryPassword])
             ->assertRedirect(route('password.change'));
-        $this->get(route('pimpinan.faculties.index'))->assertRedirect(route('password.change'));
+        $this->get(route('pimpinan.dashboard'))->assertRedirect(route('password.change'));
         $this->post(route('password.update'), [
             'current_password' => $temporaryPassword,
             'password' => 'AmanPimpinan2026!Sandi',
             'password_confirmation' => 'AmanPimpinan2026!Sandi',
-        ])->assertRedirect(route('pimpinan.faculties.index'));
-        $this->get(route('login'))->assertRedirect(route('pimpinan.faculties.index'));
+        ])->assertRedirect(route('pimpinan.dashboard'));
+        $this->get(route('login'))->assertRedirect(route('pimpinan.dashboard'));
     }
 
     public function test_leadership_can_open_each_faculty_and_filter_its_cohort_and_reports_by_program(): void
@@ -91,14 +91,17 @@ class LeadershipPortalAccessTest extends TestCase
         $leadership = $this->createAccount('pimpinan');
         $filters = ['faculty' => $faculty, 'period_id' => $period->id, 'study_program_id' => $program->id];
 
-        $directory = $this->actingAs($leadership)->get(route('pimpinan.faculties.index'))->assertOk();
+        $dashboard = $this->actingAs($leadership)->get(route('pimpinan.dashboard'))->assertOk();
         foreach ($faculties as $listedFaculty) {
-            $directory->assertSee($listedFaculty->name)->assertSee(route('pimpinan.faculties.dashboard', $listedFaculty));
+            $dashboard->assertSee($listedFaculty->code)
+                ->assertSee('aria-controls="leadership-faculty-'.$listedFaculty->id.'"', false)
+                ->assertSee(route('pimpinan.faculties.dashboard', $listedFaculty));
             $this->get(route('pimpinan.faculties.dashboard', $listedFaculty))->assertOk()
                 ->assertSee('Dashboard '.$listedFaculty->name)
                 ->assertSee(route('pimpinan.faculties.analytics.index', ['faculty' => $listedFaculty, 'period_id' => $period->id]));
         }
-        $this->get(route('pimpinan.supervisions.index'))->assertRedirect(route('pimpinan.faculties.index'));
+        $this->get(route('pimpinan.faculties.index'))->assertRedirect(route('pimpinan.dashboard'));
+        $this->get(route('pimpinan.supervisions.index'))->assertRedirect(route('pimpinan.reports.supervision'));
 
         $this->get(route('pimpinan.faculties.dashboard', $filters))->assertOk()->assertViewHas('submittedCount', $expectedCount);
         $this->get(route('pimpinan.faculties.analytics.index', $filters))->assertOk()->assertSee('Analisis Kohort T1/T2')
@@ -121,6 +124,31 @@ class LeadershipPortalAccessTest extends TestCase
         foreach (['dashboard', 'analytics.index', 'reports.supervision', 'lecturers.index'] as $section) {
             $this->get(route('pimpinan.faculties.'.$section, ['faculty' => $faculty, 'study_program_id' => $outsideProgram->id]))->assertNotFound();
         }
+    }
+
+    public function test_leadership_can_view_university_wide_dashboard_cohort_and_report(): void
+    {
+        $this->seed(CompleteDemoDataSeeder::class);
+        $period = SupervisionPeriod::active()->sole();
+        $leadership = $this->createAccount('pimpinan');
+        $submitted = Supervision::where('status', 'SUBMITTED')
+            ->whereHas('assignment', fn ($assignments) => $assignments->where('status', '<>', 'CANCELLED'))
+            ->whereHas('assignment.supervisionStage', fn ($stages) => $stages->where('supervision_period_id', $period->id));
+        $filters = ['period_id' => $period->id];
+
+        $this->actingAs($leadership)->get(route('pimpinan.dashboard', $filters))->assertOk()
+            ->assertSee('Dashboard Seluruh Fakultas')
+            ->assertViewHas('submittedCount', $submitted->count())
+            ->assertSee(route('pimpinan.analytics.index', $filters))
+            ->assertSee(route('pimpinan.reports.supervision', $filters))
+            ->assertDontSee('Buka dashboard fakultas');
+        $this->get(route('pimpinan.analytics.index', $filters))->assertOk()
+            ->assertSee('Analisis Kohort Seluruh Fakultas')
+            ->assertViewHas('analytics', fn (array $analytics): bool => collect($analytics['stage_results'])->pluck('faculty')->unique()->count() >= 3);
+        $this->get(route('pimpinan.reports.supervision', $filters + ['stage' => '1']))->assertOk()
+            ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === (clone $submitted)
+                ->whereHas('assignment.supervisionStage', fn ($stages) => $stages->where('stage_no', 1))->count())
+            ->assertDontSee('Ekspor Excel');
     }
 
     public function test_leadership_cannot_access_drafts_cancelled_results_or_admin_actions(): void
@@ -153,7 +181,9 @@ class LeadershipPortalAccessTest extends TestCase
         $this->seed(RoleAndPermissionSeeder::class);
         $account = $this->createAccount($role);
 
-        $this->actingAs($account)->get(route('pimpinan.faculties.index'))->assertForbidden();
+        $this->actingAs($account)->get(route('pimpinan.dashboard'))->assertForbidden();
+        $this->get(route('pimpinan.analytics.index'))->assertForbidden();
+        $this->get(route('pimpinan.reports.supervision'))->assertForbidden();
     }
 
     private function createAccount(string $role): User

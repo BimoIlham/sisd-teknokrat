@@ -74,6 +74,7 @@ class SupervisionAnalyticsService
                 ->where('status', 'SUBMITTED')
                 ->with([
                     'assignment.targetLecturer.studyProgram.faculty',
+                    'assignment.targetLecturer.faculty',
                     'assignment.teachingOccurrence.teachingSchedule',
                     'formTemplate',
                     'scoringPolicy',
@@ -108,7 +109,7 @@ class SupervisionAnalyticsService
                 'target_lecturer' => $targetLecturer?->name ?? 'Dosen tidak diketahui',
                 'nidn' => $targetLecturer?->nidn,
                 'prodi' => $targetLecturer?->studyProgram?->name ?? '-',
-                'faculty' => $targetLecturer?->studyProgram?->faculty?->name ?? '-',
+                'faculty' => $targetLecturer?->studyProgram?->faculty?->name ?? $targetLecturer?->faculty?->name ?? '-',
                 'delivery_mode' => $mode1 ?? $mode2,
                 't1_score' => $s1 ? round((float) $s1->final_score, 2) : null,
                 't2_score' => $s2 ? round((float) $s2->final_score, 2) : null,

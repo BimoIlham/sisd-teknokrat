@@ -17,16 +17,14 @@ use Illuminate\View\View;
 
 class LeadershipFacultyController extends Controller
 {
-    public function index(): View
+    public function redirectToDashboard(): RedirectResponse
     {
-        $faculties = Faculty::where('is_active', true)->orderBy('name')->get();
-
-        return view('unit.faculties', compact('faculties'));
+        return redirect()->route('pimpinan.dashboard');
     }
 
-    public function redirectToFaculties(): RedirectResponse
+    public function redirectToReport(): RedirectResponse
     {
-        return redirect()->route('pimpinan.faculties.index');
+        return redirect()->route('pimpinan.reports.supervision');
     }
 
     public function showLecturer(Request $request, Faculty $faculty, Lecturer $lecturer, LecturerDirectoryController $directory, WeeklySupervisionScheduleGrouper $scheduleGrouper): View

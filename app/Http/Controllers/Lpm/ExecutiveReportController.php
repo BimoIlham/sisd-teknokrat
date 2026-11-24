@@ -20,7 +20,7 @@ class ExecutiveReportController extends Controller
 {
     public function index(Request $request, ?Faculty $faculty = null): View
     {
-        $scope = $request->routeIs('unit.*', 'pimpinan.faculties.*') ? OrganizationalScope::forRequest($request) : null;
+        $scope = $request->routeIs('unit.*', 'pimpinan.*') ? OrganizationalScope::forRequest($request) : null;
         $periods = SupervisionPeriod::query()
             ->with(['academicTerm', 'stages'])
             ->latest('starts_on')
@@ -97,7 +97,8 @@ class ExecutiveReportController extends Controller
                 ? ($scope ? $scope->label().' · ' : '').$selectedPeriod->semester_display.' · '.($selectedStage === 'all' ? 'Tahap 1 dan Tahap 2' : 'Tahap '.$selectedStage)
                 : 'Belum ada semester supervisi',
             'reportUrl' => $scope?->route('reports.supervision') ?? route('lpm.reports.supervision'),
-            'publisherLabel' => $scope ? $scope->roleLabel().' '.$scope->label() : 'Lembaga Penjaminan Mutu (LPM)',
+            'publisherLabel' => $scope?->isUniversityWide() ? $scope->label()
+                : ($scope ? $scope->roleLabel().' '.$scope->label() : 'Lembaga Penjaminan Mutu (LPM)'),
             'scope' => $scope,
             'summary' => $summary,
             'top10T1' => $top10T1,

@@ -33,7 +33,7 @@ class AuthController extends Controller
                 return redirect()->route('unit.dashboard');
             }
             if ($user->isLeadership()) {
-                return redirect()->route('pimpinan.faculties.index');
+                return redirect()->route('pimpinan.dashboard');
             }
             if ($user->hasRole('supervisor')) {
                 return redirect()->route('supervisor.dashboard');
@@ -229,7 +229,7 @@ class AuthController extends Controller
             $fallbackRoute = 'unit.dashboard';
         } elseif ($user->isLeadership()) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/pimpinan';
-            $fallbackRoute = 'pimpinan.faculties.index';
+            $fallbackRoute = 'pimpinan.dashboard';
         } elseif ($user->hasRole('supervisor')) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/supervisor';
             $fallbackRoute = 'supervisor.dashboard';

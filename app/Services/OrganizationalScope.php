@@ -11,13 +11,13 @@ use Illuminate\Http\Request;
 
 class OrganizationalScope
 {
-    private readonly int $facultyId;
+    private readonly ?int $facultyId;
 
     private readonly ?int $studyProgramId;
 
     private readonly string $label;
 
-    public function __construct(User $user, private readonly ?Faculty $leadershipFaculty = null, ?int $programId = null)
+    public function __construct(User $user, private readonly ?Faculty $leadershipFaculty = null, ?int $programId = null, bool $universityWide = false)
     {
         if ($leadershipFaculty) {
             abort_unless($user->isLeadership(), 403);
@@ -28,6 +28,15 @@ class OrganizationalScope
             $this->facultyId = $leadershipFaculty->id;
             $this->studyProgramId = $programId;
             $this->label = $leadershipFaculty->name;
+
+            return;
+        }
+
+        if ($universityWide) {
+            abort_unless($user->isLeadership(), 403);
+            $this->facultyId = null;
+            $this->studyProgramId = null;
+            $this->label = 'Seluruh Fakultas';
 
             return;
         }
@@ -65,12 +74,18 @@ class OrganizationalScope
             $request->routeIs('pimpinan.faculties.*') && $request->filled('study_program_id')
                 ? $request->integer('study_program_id')
                 : null,
+            $request->routeIs('pimpinan.dashboard', 'pimpinan.analytics.index', 'pimpinan.reports.supervision'),
         );
     }
 
     public function isLeadershipFaculty(): bool
     {
         return $this->leadershipFaculty !== null;
+    }
+
+    public function isUniversityWide(): bool
+    {
+        return $this->facultyId === null;
     }
 
     /** @return Collection<int, StudyProgram> */
@@ -89,10 +104,10 @@ class OrganizationalScope
             ]);
         }
 
-        return route('unit.'.$name, $parameters);
+        return route(($this->isUniversityWide() ? 'pimpinan.' : 'unit.').$name, $parameters);
     }
 
-    public function facultyId(): int
+    public function facultyId(): ?int
     {
         return $this->facultyId;
     }
@@ -109,11 +124,19 @@ class OrganizationalScope
 
     public function roleLabel(): string
     {
+        if ($this->isUniversityWide()) {
+            return 'Universitas';
+        }
+
         return $this->studyProgramId && ! $this->isLeadershipFaculty() ? 'Program Studi' : 'Fakultas';
     }
 
     public function lecturers(Builder $query): Builder
     {
+        if ($this->isUniversityWide()) {
+            return $query;
+        }
+
         if ($this->studyProgramId) {
             return $query->where('study_program_id', $this->studyProgramId);
         }
@@ -126,11 +149,15 @@ class OrganizationalScope
 
     public function targets(Builder $query): Builder
     {
-        return $query->whereHas('lecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
+        return $this->isUniversityWide()
+            ? $query
+            : $query->whereHas('lecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
     }
 
     public function supervisions(Builder $query): Builder
     {
-        return $query->whereHas('assignment.targetLecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
+        return $this->isUniversityWide()
+            ? $query
+            : $query->whereHas('assignment.targetLecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
     }
 }

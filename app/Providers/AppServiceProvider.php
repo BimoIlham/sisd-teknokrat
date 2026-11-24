@@ -3,17 +3,24 @@
 namespace App\Providers;
 
 use App\Http\Middleware\BrowserLogResourceGuard;
+use App\Models\Faculty;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\View as BladeView;
 use Symfony\Component\HttpFoundation\Response;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        View::composer('unit.leadership-navigation', function (BladeView $view): void {
+            $view->with('leadershipFaculties', Faculty::where('is_active', true)->orderBy('name')->get());
+        });
+
         foreach (['supervision-uploads' => 10, 'schedule-generation' => 2, 'schedule-imports' => 6, 'report-exports' => 15, 'schedule-commits' => 6] as $name => $attempts) {
             RateLimiter::for($name, fn (Request $request): Limit => Limit::perMinute($attempts)
                 ->by((string) $request->user()->id)

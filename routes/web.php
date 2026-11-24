@@ -146,9 +146,11 @@ Route::middleware(['auth', 'role:lpm_admin'])->prefix('lpm/unit-accounts')->name
 });
 
 Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan.')->group(function () {
-    Route::get('/faculties', [LeadershipFacultyController::class, 'index'])->name('faculties.index');
-    Route::get('/reports/supervision', [LeadershipFacultyController::class, 'redirectToFaculties'])->name('reports.supervision');
-    Route::get('/supervisions', [LeadershipFacultyController::class, 'redirectToFaculties'])->name('supervisions.index');
+    Route::get('/dashboard', [UnitDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
+    Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    Route::get('/faculties', [LeadershipFacultyController::class, 'redirectToDashboard'])->name('faculties.index');
+    Route::get('/supervisions', [LeadershipFacultyController::class, 'redirectToReport'])->name('supervisions.index');
 
     Route::prefix('faculties/{faculty}')->name('faculties.')->group(function () {
         Route::get('/', [UnitDashboardController::class, 'index'])->name('dashboard');

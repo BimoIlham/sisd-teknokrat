@@ -36,9 +36,11 @@
             <a href="{{ $scope->route('analytics.index', ['period_id' => $period?->id]) }}" class="mt-4 inline-block text-sm font-semibold text-[#7B1113] underline">Lihat analisis</a>
         </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 class="text-lg font-bold text-slate-900">Akses unit</h2>
+            <h2 class="text-lg font-bold text-slate-900">{{ $scope->isUniversityWide() ? 'Laporan Seluruh Fakultas' : 'Akses unit' }}</h2>
             <div class="mt-3 flex flex-wrap gap-3 text-sm font-semibold text-[#7B1113]">
-                <a href="{{ $scope->route('lecturers.index', ['period_id' => $period?->id]) }}" class="rounded-xl border border-slate-200 px-4 py-2">Direktori Dosen</a>
+                @unless($scope->isUniversityWide())
+                    <a href="{{ $scope->route('lecturers.index', ['period_id' => $period?->id]) }}" class="rounded-xl border border-slate-200 px-4 py-2">Direktori Dosen</a>
+                @endunless
                 <a href="{{ $scope->route('reports.supervision', ['period_id' => $period?->id]) }}" class="rounded-xl border border-slate-200 px-4 py-2">Laporan Hasil Supervisi</a>
             </div>
         </section>
@@ -53,7 +55,7 @@
                     <span class="text-slate-600">Tahap {{ $submission->assignment?->supervisionStage?->stage_no ?? '—' }} · {{ number_format((float) $submission->final_score, 2) }}</span>
                 </div>
             @empty
-                <p class="py-3 text-sm text-slate-500">Belum ada hasil supervisi yang dikirim untuk unit ini.</p>
+                <p class="py-3 text-sm text-slate-500">Belum ada hasil supervisi yang dikirim pada periode ini.</p>
             @endforelse
         </div>
     </section>

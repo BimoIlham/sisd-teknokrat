@@ -55,7 +55,7 @@
             <a href="{{ route(match (true) {
                 auth()->user()->isLpmStaff() => 'lpm.dashboard',
                 auth()->user()->isOrganizationalStaff() => 'unit.dashboard',
-                auth()->user()->isLeadership() => 'pimpinan.faculties.index',
+                auth()->user()->isLeadership() => 'pimpinan.dashboard',
                 default => 'supervisor.dashboard',
             }) }}" class="flex flex-1 items-center min-w-0" aria-label="Lembaga Penjaminan Mutu — halaman utama">
                 <img
@@ -316,24 +316,7 @@
                 <a href="{{ route('unit.reports.supervision') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.reports.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Laporan Hasil Supervisi</span></a>
             </div>
             @elseif(auth()->user()->isLeadership())
-            <div class="space-y-1">
-                <div x-show="!sidebarCollapsed" class="px-3 text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80">Pimpinan / Wakil Rektor</div>
-                <a href="{{ route('pimpinan.faculties.index') }}" aria-label="Daftar Fakultas" title="Daftar Fakultas" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('pimpinan.faculties.index') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
-                    <svg class="w-4.5 h-4.5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 6h14M5 12h14M5 18h14"/></svg>
-                    <span x-show="!sidebarCollapsed">Daftar Fakultas</span>
-                </a>
-                @if(($scope ?? null)?->isLeadershipFaculty())
-                    <div x-show="!sidebarCollapsed" class="px-3 pt-4 text-xs font-semibold text-rose-100/80">{{ $scope->label() }}</div>
-                    @foreach([
-                        'dashboard' => ['Dashboard', 'dashboard'],
-                        'lecturers.index' => ['Direktori Dosen', 'lecturers.*'],
-                        'analytics.index' => ['Analisis Kohort T1/T2', 'analytics.*'],
-                        'reports.supervision' => ['Laporan Hasil Supervisi', 'reports.*'],
-                    ] as $facultyRoute => [$label, $activeRoute])
-                        <a href="{{ $scope->route($facultyRoute, ['period_id' => request()->query('period_id')]) }}" x-show="!sidebarCollapsed" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('pimpinan.faculties.'.$activeRoute) ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">{{ $label }}</a>
-                    @endforeach
-                @endif
-            </div>
+                @include('unit.leadership-navigation')
             @else
             <!-- SUPERVISOR MENU -->
             <div>
