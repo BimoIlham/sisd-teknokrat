@@ -1,10 +1,10 @@
-@extends('layouts.app', ['title' => 'Akun Fakultas dan Prodi'])
+@extends('layouts.app', ['title' => 'Akun Fakultas, Prodi, dan Pimpinan'])
 
 @section('content')
 <div class="space-y-6">
     <header>
-        <h1 class="text-2xl font-bold text-slate-900">Akun Fakultas dan Prodi</h1>
-        <p class="mt-1 text-sm text-slate-600">Akun hanya dapat melihat dosen dan hasil supervisi pada unit yang ditetapkan.</p>
+        <h1 class="text-2xl font-bold text-slate-900">Akun Fakultas, Prodi, dan Pimpinan</h1>
+        <p class="mt-1 text-sm text-slate-600">Akun Fakultas dan Prodi melihat hasil unit masing-masing. Pimpinan / Wakil Rektor dapat melihat hasil semua fakultas.</p>
     </header>
     @if ($errors->any())
         <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{{ $errors->first() }}</div>
@@ -15,14 +15,14 @@
         $initialAccount = ['role' => old('role', 'fakultas'), 'facultyId' => old('faculty_id', ''), 'studyProgramId' => old('study_program_id', ''), 'name' => old('name', ''), 'email' => old('email', '')];
     @endphp
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" x-data="unitAccountCreator(@js($facultyOptions), @js($studyProgramOptions), @js($initialAccount))">
-        <h2 class="mb-4 text-lg font-semibold text-slate-900">Buat akun unit</h2>
+        <h2 class="mb-4 text-lg font-semibold text-slate-900">Buat akun</h2>
         <form method="POST" action="{{ route('lpm.unit_accounts.store') }}" class="grid gap-3 sm:grid-cols-2">@csrf
-            <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option></select></label>
+            <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option><option value="pimpinan">Pimpinan / Wakil Rektor</option></select></label>
             <label x-show="role === 'fakultas'" class="text-sm font-medium text-slate-700">Fakultas<select name="faculty_id" x-model="facultyId" :disabled="role !== 'fakultas'" :required="role === 'fakultas'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih fakultas</option>@foreach ($faculties as $faculty)<option value="{{ $faculty->id }}" @disabled($facultyCounts->get($faculty->id, 0) > 0)>{{ $faculty->name }}{{ $facultyCounts->get($faculty->id, 0) > 0 ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>
             <label x-show="role === 'prodi'" x-cloak class="text-sm font-medium text-slate-700">Program studi<select name="study_program_id" x-model="studyProgramId" :disabled="role !== 'prodi'" :required="role === 'prodi'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih program studi</option>@foreach ($studyPrograms as $program)<option value="{{ $program->id }}" @disabled($programCounts->get($program->id, 0) > 0)>{{ $program->name }} · {{ $program->faculty?->name }}{{ $programCounts->get($program->id, 0) > 0 ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>
             <label class="text-sm font-medium text-slate-700">Nama pengguna<input name="name" x-model="name" required maxlength="255" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></label>
             <label class="text-sm font-medium text-slate-700">Email<input name="email" type="email" x-model="email" required maxlength="255" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></label>
-            <p class="text-xs text-slate-500 sm:col-span-2">Nama dan email diisi sebagai saran setelah unit dipilih. Periksa alamat email sebelum menyimpan; keduanya dapat diubah.</p>
+            <p x-show="role !== 'pimpinan'" class="text-xs text-slate-500 sm:col-span-2">Nama dan email diisi sebagai saran setelah unit dipilih. Periksa alamat email sebelum menyimpan.</p>
             <div class="sm:col-span-2"><button class="rounded-xl bg-[#7B1113] px-4 py-2 text-sm font-semibold text-white">Buat akun</button></div>
             @if (session('temporary_password'))
                 <div id="temporary-password" role="status" class="scroll-mt-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 sm:col-span-2">
@@ -49,6 +49,7 @@
                     <option value="all" @selected($roleFilter === 'all')>Semua</option>
                     <option value="fakultas" @selected($roleFilter === 'fakultas')>Fakultas</option>
                     <option value="prodi" @selected($roleFilter === 'prodi')>Prodi</option>
+                    <option value="pimpinan" @selected($roleFilter === 'pimpinan')>Pimpinan / Wakil Rektor</option>
                 </select>
             </form>
         </div>
@@ -69,18 +70,20 @@
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($users as $user)
                             @php
-                                $userRole = $user->hasRole('prodi') ? 'prodi' : 'fakultas';
-                                $duplicateCount = $userRole === 'prodi'
-                                    ? $programCounts->get($user->study_program_id, 0)
-                                    : $facultyCounts->get($user->faculty_id, 0);
+                                $userRole = $user->roles->sole()->name;
+                                $duplicateCount = match ($userRole) {
+                                    'prodi' => $programCounts->get($user->study_program_id, 0),
+                                    'fakultas' => $facultyCounts->get($user->faculty_id, 0),
+                                    default => 0,
+                                };
                             @endphp
                             <tr class="hover:bg-slate-50/60">
                                 <td class="px-4 py-3 text-center text-slate-500">{{ $users->firstItem() + $loop->index }}</td>
                                 <td class="px-4 py-3 font-semibold text-slate-900">{{ $user->name }}</td>
                                 <td class="px-4 py-3 text-slate-600">{{ $user->email }}</td>
-                                <td class="px-4 py-3">{{ $userRole === 'prodi' ? 'Prodi' : 'Fakultas' }}</td>
+                                <td class="px-4 py-3">{{ match ($userRole) { 'prodi' => 'Prodi', 'fakultas' => 'Fakultas', default => 'Pimpinan / Wakil Rektor' } }}</td>
                                 <td class="px-4 py-3">
-                                    <span>{{ $userRole === 'prodi' ? ($user->studyProgram?->name ?? 'Belum ditetapkan') : ($user->faculty?->name ?? 'Belum ditetapkan') }}</span>
+                                    <span>{{ match ($userRole) { 'prodi' => $user->studyProgram?->name ?? 'Belum ditetapkan', 'fakultas' => $user->faculty?->name ?? 'Belum ditetapkan', default => 'Semua Fakultas' } }}</span>
                                     @if ($duplicateCount > 1)
                                         <span class="mt-1 block w-fit rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">Perlu ditinjau · {{ $duplicateCount }} akun</span>
                                     @endif

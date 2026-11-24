@@ -32,6 +32,9 @@ class AuthController extends Controller
             if ($user->isOrganizationalStaff()) {
                 return redirect()->route('unit.dashboard');
             }
+            if ($user->isLeadership()) {
+                return redirect()->route('pimpinan.reports.supervision');
+            }
             if ($user->hasRole('supervisor')) {
                 return redirect()->route('supervisor.dashboard');
             }
@@ -224,6 +227,9 @@ class AuthController extends Controller
         } elseif ($user->isOrganizationalStaff()) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/unit';
             $fallbackRoute = 'unit.dashboard';
+        } elseif ($user->isLeadership()) {
+            $rolePrefix = rtrim(request()->getBasePath(), '/').'/pimpinan';
+            $fallbackRoute = 'pimpinan.reports.supervision';
         } elseif ($user->hasRole('supervisor')) {
             $rolePrefix = rtrim(request()->getBasePath(), '/').'/supervisor';
             $fallbackRoute = 'supervisor.dashboard';

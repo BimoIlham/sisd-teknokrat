@@ -36,7 +36,7 @@ class UnitPortalAccessTest extends TestCase
         $faculty = Faculty::create(['code' => 'UNIT-FTIK', 'name' => 'Fakultas Unit FTIK', 'is_active' => true]);
         $program = StudyProgram::create(['faculty_id' => $faculty->id, 'code' => 'UNIT-IF', 'name' => 'Prodi Unit IF', 'is_active' => true]);
         $otherProgram = StudyProgram::create(['faculty_id' => $faculty->id, 'code' => 'UNIT-SI', 'name' => 'Prodi Unit SI', 'is_active' => true]);
-        $this->actingAs($this->lpm)->get(route('lpm.unit_accounts.index'))->assertOk()->assertSee('Akun Fakultas dan Prodi');
+        $this->actingAs($this->lpm)->get(route('lpm.unit_accounts.index'))->assertOk()->assertSee('Akun Fakultas, Prodi, dan Pimpinan');
 
         $creation = $this->post(route('lpm.unit_accounts.store'), ['name' => 'Akun Fakultas', 'email' => 'unit-fakultas@example.test',
             'role' => 'fakultas', 'faculty_id' => $faculty->id]);

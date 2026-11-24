@@ -19,7 +19,7 @@ class SupervisionPolicy
             return true;
         }
 
-        if (! $user->isOrganizationalStaff() || $supervision->status !== 'SUBMITTED') {
+        if ((! $user->isOrganizationalStaff() && ! $user->isLeadership()) || ! $supervision->isSubmitted()) {
             return false;
         }
 
@@ -27,6 +27,10 @@ class SupervisionPolicy
         $periodId = $assignment?->supervisionStage?->supervision_period_id;
         if (! $assignment || ! $periodId || $assignment->status === 'CANCELLED') {
             return false;
+        }
+
+        if ($user->isLeadership()) {
+            return in_array($assignment->supervisionStage->stage_no, [1, 2], true);
         }
 
         $scope = new OrganizationalScope($user);

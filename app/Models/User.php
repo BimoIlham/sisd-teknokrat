@@ -76,4 +76,9 @@ class User extends Authenticatable
     {
         return $this->hasAnyRole(['fakultas', 'prodi']);
     }
+
+    public function isLeadership(): bool
+    {
+        return $this->hasRole('pimpinan');
+    }
 }

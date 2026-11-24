@@ -1,10 +1,19 @@
-@extends('layouts.app', ['title' => 'Detail Akun Unit'])
+@php
+    $userRole = $user->roles->sole()->name;
+    $pageTitle = $userRole === 'pimpinan' ? 'Detail Akun Pimpinan' : 'Detail Akun Unit';
+    $duplicateCount = match ($userRole) {
+        'prodi' => $programCounts->get($user->study_program_id, 0),
+        'fakultas' => $facultyCounts->get($user->faculty_id, 0),
+        default => 0,
+    };
+@endphp
+@extends('layouts.app', ['title' => $pageTitle])
 
 @section('content')
 <div class="mx-auto max-w-4xl space-y-6">
     <header class="space-y-2">
-        <a href="{{ route('lpm.unit_accounts.index') }}" class="text-sm font-semibold text-[#7B1113] hover:underline">&larr; Kembali ke akun Fakultas dan Prodi</a>
-        <h1 class="text-2xl font-bold text-slate-900">Detail Akun Unit</h1>
+        <a href="{{ route('lpm.unit_accounts.index') }}" class="text-sm font-semibold text-[#7B1113] hover:underline">&larr; Kembali ke daftar akun</a>
+        <h1 class="text-2xl font-bold text-slate-900">{{ $pageTitle }}</h1>
         <p class="text-sm text-slate-600">{{ $user->name }} · {{ $user->email }}</p>
     </header>
 
@@ -12,12 +21,6 @@
         <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{{ $errors->first() }}</div>
     @endif
 
-    @php
-        $userRole = $user->hasRole('prodi') ? 'prodi' : 'fakultas';
-        $duplicateCount = $userRole === 'prodi'
-            ? $programCounts->get($user->study_program_id, 0)
-            : $facultyCounts->get($user->faculty_id, 0);
-    @endphp
     @if ($duplicateCount > 1)
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <strong>Perlu ditinjau:</strong> {{ $duplicateCount }} akun memakai unit ini. Pilih akun yang dipertahankan, lalu hapus akun lainnya dari tabel.
@@ -31,7 +34,12 @@
             @method('PUT')
             <label class="text-sm font-medium text-slate-700">Nama<input name="name" value="{{ old('name', $user->name) }}" required maxlength="255" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></label>
             <label class="text-sm font-medium text-slate-700">Email<input name="email" type="email" value="{{ old('email', $user->email) }}" required maxlength="255" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></label>
-            <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option></select></label>
+            @if($userRole === 'pimpinan')
+                <input type="hidden" name="role" value="pimpinan">
+                <div class="text-sm font-medium text-slate-700">Peran<p class="mt-1">Pimpinan / Wakil Rektor</p></div>
+            @else
+                <label class="text-sm font-medium text-slate-700">Peran<select name="role" x-model="role" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="fakultas">Fakultas</option><option value="prodi">Program Studi</option></select></label>
+            @endif
             <label class="text-sm font-medium text-slate-700">Status<select name="is_active" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="1" @selected(old('is_active', (int) $user->is_active) == 1)>Aktif</option><option value="0" @selected(old('is_active', (int) $user->is_active) == 0)>Nonaktif</option></select></label>
             <label x-show="role === 'fakultas'" class="text-sm font-medium text-slate-700">Fakultas<select name="faculty_id" :disabled="role !== 'fakultas'" :required="role === 'fakultas'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih fakultas</option>@foreach ($faculties as $faculty)<option value="{{ $faculty->id }}" @selected(old('faculty_id', $userRole === 'fakultas' ? $user->faculty_id : null) == $faculty->id) @disabled($facultyCounts->get($faculty->id, 0) > 0 && ! ($userRole === 'fakultas' && $user->faculty_id === $faculty->id))>{{ $faculty->name }}{{ $facultyCounts->get($faculty->id, 0) > 0 && ! ($userRole === 'fakultas' && $user->faculty_id === $faculty->id) ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>
             <label x-show="role === 'prodi'" x-cloak class="text-sm font-medium text-slate-700">Program studi<select name="study_program_id" :disabled="role !== 'prodi'" :required="role === 'prodi'" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"><option value="">Pilih program studi</option>@foreach ($studyPrograms as $program)<option value="{{ $program->id }}" @selected(old('study_program_id', $userRole === 'prodi' ? $user->study_program_id : null) == $program->id) @disabled($programCounts->get($program->id, 0) > 0 && ! ($userRole === 'prodi' && $user->study_program_id === $program->id))>{{ $program->name }} · {{ $program->faculty?->name }}{{ $programCounts->get($program->id, 0) > 0 && ! ($userRole === 'prodi' && $user->study_program_id === $program->id) ? ' · Sudah memiliki akun' : '' }}</option>@endforeach</select></label>

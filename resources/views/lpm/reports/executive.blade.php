@@ -48,6 +48,9 @@
                 </h1>
 
                 <p class="mt-1 text-sm font-medium text-slate-600">{{ $reportLabel }}</p>
+                @if($isLeadershipReport)
+                    <p class="mt-1 text-sm text-slate-600 print:hidden">Ringkasan semua fakultas</p>
+                @endif
                 <p class="mt-2 hidden text-xs text-slate-500 print:block">Meningkatkan Kualitas Pembelajaran, Mewujudkan UTI Disiplin, Bermutu, Kreatif, Inovatif</p>
             </div>
 
@@ -74,6 +77,9 @@
                 </form>
 
                 <div class="flex flex-wrap items-center gap-2">
+                    @if($isLeadershipReport)
+                        <a href="{{ route('pimpinan.supervisions.index', ['period_id' => $selectedPeriod?->id, 'stage' => $selectedStage]) }}" class="filter-button">Lihat Hasil per Dosen</a>
+                    @endif
                     @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
                         @if($canExportExcel)
                             <a href="{{ route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]) }}" class="filter-button">Ekspor Excel (3 Sheet)</a>

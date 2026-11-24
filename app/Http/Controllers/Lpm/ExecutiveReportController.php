@@ -20,6 +20,7 @@ class ExecutiveReportController extends Controller
     public function index(Request $request): View
     {
         $scope = $request->routeIs('unit.*') ? new OrganizationalScope($request->user()) : null;
+        $isLeadershipReport = $request->routeIs('pimpinan.*');
         $periods = SupervisionPeriod::query()
             ->with(['academicTerm', 'stages'])
             ->latest('starts_on')
@@ -95,8 +96,9 @@ class ExecutiveReportController extends Controller
             'reportLabel' => $selectedPeriod
                 ? ($scope ? $scope->label().' · ' : '').$selectedPeriod->semester_display.' · '.($selectedStage === 'all' ? 'Tahap 1 dan Tahap 2' : 'Tahap '.$selectedStage)
                 : 'Belum ada semester supervisi',
-            'reportRoute' => $scope ? 'unit.reports.supervision' : 'lpm.reports.supervision',
+            'reportRoute' => $request->route()->getName(),
             'publisherLabel' => $scope ? $scope->roleLabel().' '.$scope->label() : 'Lembaga Penjaminan Mutu (LPM)',
+            'isLeadershipReport' => $isLeadershipReport,
             'summary' => $summary,
             'top10T1' => $top10T1,
             'bottom10T1' => $bottom10T1,
@@ -111,7 +113,7 @@ class ExecutiveReportController extends Controller
             'hasSubmissions' => $submissions->isNotEmpty(),
         ];
         $notes = $this->findingNotes($submissions);
-        $canExportExcel = ! $scope && $selectedPeriod
+        $canExportExcel = $request->routeIs('lpm.*') && $selectedPeriod
             && app(SupervisionExcelExportService::class)->hasResults($selectedPeriod);
 
         $classifiedNotes = $this->classifyNotes($notes);

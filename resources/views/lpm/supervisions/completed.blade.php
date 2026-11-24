@@ -1,19 +1,24 @@
-@extends('layouts.app', ['title' => 'Monitoring Supervisi'])
+@extends('layouts.app', ['title' => $isLeadershipReport ? 'Hasil Supervisi per Dosen' : 'Monitoring Supervisi'])
 
 @section('content')
 <div class="mx-auto max-w-7xl space-y-6 pb-10">
+    @php
+        $resultsRoute = $isLeadershipReport ? 'pimpinan.supervisions.index' : 'lpm.supervisions.monitoring';
+        $pdfRoute = $isLeadershipReport ? 'pimpinan.supervisions.pdf' : 'lpm.supervisions.pdf';
+        $pageTitle = $isLeadershipReport ? 'Hasil Supervisi per Dosen' : 'Monitoring Supervisi';
+    @endphp
     <header>
         <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
             <span>Hasil &amp; Analisis</span>
             <span aria-hidden="true">/</span>
-            <span class="text-slate-800">Monitoring Supervisi</span>
+            <span class="text-slate-800">{{ $pageTitle }}</span>
         </div>
-        <h1 class="mt-3 text-2xl font-extrabold tracking-tight text-slate-900">Monitoring Supervisi</h1>
-        <p class="mt-1 text-sm text-slate-600">Pantau dosen sasaran, supervisor, dan progres Tahap 1 serta Tahap 2 pada semester yang dipilih.</p>
+        <h1 class="mt-3 text-2xl font-extrabold tracking-tight text-slate-900">{{ $pageTitle }}</h1>
+        <p class="mt-1 text-sm text-slate-600">{{ $isLeadershipReport ? 'Lihat nilai dan PDF hasil supervisi yang sudah dikirim dari semua fakultas.' : 'Pantau dosen sasaran, supervisor, dan progres Tahap 1 serta Tahap 2 pada semester yang dipilih.' }}</p>
     </header>
 
-    <section aria-label="Filter monitoring supervisi" class="filter-bar">
-        <form method="GET" action="{{ route('lpm.supervisions.monitoring') }}" class="filter-controls filter-controls-many" style="--filter-columns: repeat(4, minmax(0,1fr))">
+    <section aria-label="Filter {{ $pageTitle }}" class="filter-bar">
+        <form method="GET" action="{{ route($resultsRoute) }}" class="filter-controls filter-controls-many" style="--filter-columns: repeat(4, minmax(0,1fr))">
             <div class="filter-search">
                 <svg class="filter-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 <input
@@ -58,6 +63,7 @@
                     <option value="2" @selected($selectedStage === '2')>Tahap 2</option>
                 </select>
             </div>
+            @unless($isLeadershipReport)
             <div class="min-w-0">
                 <select name="status" aria-label="Status Supervisi" class="filter-control">
                     <option value="all" @selected($selectedStatus === 'all')>Semua Status</option>
@@ -74,12 +80,15 @@
                     @endforeach
                 </select>
             </div>
+            @endunless
             <div class="filter-actions">
                 <button type="submit" class="filter-button">Filter</button>
-                <a href="{{ route('lpm.supervisions.monitoring', ['period_id' => $selectedPeriod?->id]) }}" class="inline-flex h-10 items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Reset</a>
+                <a href="{{ route($resultsRoute, ['period_id' => $selectedPeriod?->id]) }}" class="inline-flex h-10 items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Reset</a>
             </div>
         </form>
-        <p class="mt-3 text-xs text-slate-500">Belum Disupervisi berarti formulir penilaian belum diisi. Draf berarti penilaian sudah mulai diisi tetapi belum dikirim. Filter status dan supervisor berlaku pada tahap yang sama; jika semua tahap dipilih, cukup salah satu tahap yang cocok.</p>
+        @unless($isLeadershipReport)
+            <p class="mt-3 text-xs text-slate-500">Belum Disupervisi berarti formulir penilaian belum diisi. Draf berarti penilaian sudah mulai diisi tetapi belum dikirim. Filter status dan supervisor berlaku pada tahap yang sama; jika semua tahap dipilih, cukup salah satu tahap yang cocok.</p>
+        @endunless
         @if($showUnfinishedTasks)
             <p class="mt-2 text-sm font-semibold text-blue-700">Menampilkan tugas yang belum dikirim, termasuk Draf. Gunakan filter di atas untuk memilih status tertentu.</p>
         @endif
@@ -145,7 +154,7 @@
                                             <div class="font-semibold text-emerald-700">Sudah Disupervisi · {{ number_format((float) $supervision->final_score, 2) }}</div>
                                             <div class="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
                                                 <span>{{ $performedAt ? $performedAt->translatedFormat('j M Y H:i').' WIB' : '-' }}</span>
-                                                <a href="{{ route('lpm.supervisions.pdf', $supervision) }}" target="_blank" rel="noopener" aria-label="Unduh PDF supervisi {{ $lecturer->name }} Tahap {{ $stageNumber }}" class="font-semibold text-[#7B1113] hover:underline">PDF</a>
+                                                <a href="{{ route($pdfRoute, $supervision) }}" target="_blank" rel="noopener" aria-label="Unduh PDF supervisi {{ $lecturer->name }} Tahap {{ $stageNumber }}" class="font-semibold text-[#7B1113] hover:underline">PDF</a>
                                             </div>
                                         @elseif($supervision?->answers_exists)
                                             <span class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Draf</span>

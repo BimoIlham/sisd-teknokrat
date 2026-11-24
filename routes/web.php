@@ -144,6 +144,13 @@ Route::middleware(['auth', 'role:lpm_admin'])->prefix('lpm/unit-accounts')->name
     Route::post('/{user}/reset-password', [UnitAccountController::class, 'resetPassword'])->name('reset_password');
 });
 
+Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan.')->group(function () {
+    Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    Route::get('/supervisions', [SupervisedLecturerController::class, 'index'])->name('supervisions.index');
+    Route::get('/supervisions/{supervision}/pdf', [LecturerDirectoryController::class, 'downloadSupervisionPdf'])
+        ->middleware('throttle:report-exports')->name('supervisions.pdf');
+});
+
 Route::middleware(['auth', 'role:fakultas|prodi'])->prefix('unit')->name('unit.')->group(function () {
     Route::get('/dashboard', [UnitDashboardController::class, 'index'])->name('dashboard');
     Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');

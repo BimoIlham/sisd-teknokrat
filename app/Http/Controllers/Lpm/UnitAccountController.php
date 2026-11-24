@@ -19,11 +19,13 @@ use Illuminate\View\View;
 
 class UnitAccountController extends Controller
 {
+    private const ACCOUNT_ROLES = ['fakultas', 'prodi', 'pimpinan'];
+
     public function index(Request $request): View
     {
-        $roleFilter = in_array($request->query('role'), ['fakultas', 'prodi'], true)
+        $roleFilter = in_array($request->query('role'), self::ACCOUNT_ROLES, true)
             ? $request->query('role') : 'all';
-        $users = User::role($roleFilter === 'all' ? ['fakultas', 'prodi'] : $roleFilter)
+        $users = User::role($roleFilter === 'all' ? self::ACCOUNT_ROLES : $roleFilter)
             ->has('roles', '=', 1)->with(['roles', 'faculty', 'studyProgram.faculty'])
             ->orderBy('name')->orderBy('id')->paginate(20)->withQueryString();
         $faculties = Faculty::where('is_active', true)->orderBy('name')->get();
@@ -64,7 +66,7 @@ class UnitAccountController extends Controller
         }, 3);
 
         return back()->withFragment('temporary-password')
-            ->with('success', 'Akun unit berhasil dibuat.')
+            ->with('success', 'Akun berhasil dibuat.')
             ->with('temporary_password', ['email' => $data['email'], 'password' => $password]);
     }
 
@@ -93,7 +95,7 @@ class UnitAccountController extends Controller
             }
         }, 3);
 
-        return redirect()->route('lpm.unit_accounts.show', $user)->with('success', 'Akun unit diperbarui.');
+        return redirect()->route('lpm.unit_accounts.show', $user)->with('success', 'Akun diperbarui.');
     }
 
     public function resetPassword(User $user, CredentialSessionRevoker $revoker): RedirectResponse
@@ -137,16 +139,22 @@ class UnitAccountController extends Controller
             $account->delete();
         });
 
-        return redirect()->route('lpm.unit_accounts.index')->with('success', 'Akun fakultas atau prodi berhasil dihapus.');
+        return redirect()->route('lpm.unit_accounts.index')->with('success', 'Akun berhasil dihapus.');
     }
 
     /** @return array{name: string, email: string, role: string, faculty_id: ?int, study_program_id: ?int, is_active: bool} */
     private function validatedAccount(Request $request, ?User $user = null): array
     {
+        $assignableRoles = match (true) {
+            $user === null => self::ACCOUNT_ROLES,
+            $user->isLeadership() => ['pimpinan'],
+            default => ['fakultas', 'prodi'],
+        };
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
-            'role' => ['required', Rule::in(['fakultas', 'prodi'])],
+            'role' => ['required', Rule::in($assignableRoles)],
             'faculty_id' => ['nullable', 'integer'],
             'study_program_id' => ['nullable', 'integer'],
             'is_active' => [$user ? 'required' : 'sometimes', 'boolean'],
@@ -160,7 +168,7 @@ class UnitAccountController extends Controller
                 throw ValidationException::withMessages(['faculty_id' => 'Pilih fakultas yang aktif.']);
             }
             $facultyId = $faculty->id;
-        } else {
+        } elseif ($data['role'] === 'prodi') {
             $studyProgram = StudyProgram::where('is_active', true)
                 ->whereHas('faculty', fn ($query) => $query->where('is_active', true))
                 ->find($data['study_program_id'] ?? null);
@@ -180,7 +188,7 @@ class UnitAccountController extends Controller
 
     private function ensureUnitAccount(User $user): void
     {
-        abort_unless($user->isOrganizationalStaff() && $user->roles()->count() === 1, 404);
+        abort_unless($user->hasAnyRole(self::ACCOUNT_ROLES) && $user->roles()->count() === 1, 404);
     }
 
     /** @return array{0: Collection, 1: Collection} */
@@ -197,6 +205,10 @@ class UnitAccountController extends Controller
     /** @param array{role: string, faculty_id: ?int, study_program_id: ?int} $data */
     private function lockUnit(array $data): void
     {
+        if ($data['role'] === 'pimpinan') {
+            return;
+        }
+
         if ($data['role'] === 'fakultas') {
             $faculty = Faculty::whereKey($data['faculty_id'])->where('is_active', true)
                 ->lockForUpdate()->first(['id']);
@@ -219,6 +231,10 @@ class UnitAccountController extends Controller
     private function ensureAvailable(array $data, ?User $account = null): void
     {
         $role = $data['role'];
+        if ($role === 'pimpinan') {
+            return;
+        }
+
         $column = $role === 'fakultas' ? 'faculty_id' : 'study_program_id';
         $unitId = $data[$column];
         if ($account && $account->hasRole($role) && (int) $account->{$column} === (int) $unitId) {

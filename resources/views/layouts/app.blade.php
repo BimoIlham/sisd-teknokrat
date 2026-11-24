@@ -52,7 +52,12 @@
     >
         <!-- Top Branding Section -->
         <div class="sidebar-branding h-20 flex items-center justify-between border-b border-white/10 shrink-0">
-            <a href="{{ auth()->user()->isLpmStaff() ? route('lpm.dashboard') : (auth()->user()->isOrganizationalStaff() ? route('unit.dashboard') : route('supervisor.dashboard')) }}" class="flex flex-1 items-center min-w-0" aria-label="Lembaga Penjaminan Mutu — halaman utama">
+            <a href="{{ route(match (true) {
+                auth()->user()->isLpmStaff() => 'lpm.dashboard',
+                auth()->user()->isOrganizationalStaff() => 'unit.dashboard',
+                auth()->user()->isLeadership() => 'pimpinan.reports.supervision',
+                default => 'supervisor.dashboard',
+            }) }}" class="flex flex-1 items-center min-w-0" aria-label="Lembaga Penjaminan Mutu — halaman utama">
                 <img
                     x-show="!sidebarCollapsed"
                     src="{{ asset('images/logo-lpm-uti.png') }}"
@@ -117,7 +122,7 @@
             @if(auth()->user()->hasRole('lpm_admin'))
             <a href="{{ route('lpm.unit_accounts.index') }}" class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ request()->routeIs('lpm.unit_accounts.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
                 <svg class="mr-3 h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m18 0v-2a4 4 0 00-3-3.87M9 11a4 4 0 100-8 4 4 0 000 8zm8-7.87a4 4 0 010 7.75" /></svg>
-                <span x-show="!sidebarCollapsed">Akun Fakultas & Prodi</span>
+                <span x-show="!sidebarCollapsed">Akun Fakultas, Prodi &amp; Pimpinan</span>
             </a>
             @endif
 
@@ -310,6 +315,18 @@
                 <a href="{{ route('unit.analytics.index') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.analytics.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Analisis Kohort T1/T2</span></a>
                 <a href="{{ route('unit.reports.supervision') }}" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('unit.reports.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}"><span x-show="!sidebarCollapsed">Laporan Hasil Supervisi</span></a>
             </div>
+            @elseif(auth()->user()->isLeadership())
+            <div class="space-y-1">
+                <div x-show="!sidebarCollapsed" class="px-3 text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80">Pimpinan / Wakil Rektor</div>
+                <a href="{{ route('pimpinan.reports.supervision') }}" aria-label="Laporan Hasil Supervisi" title="Laporan Hasil Supervisi" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('pimpinan.reports.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                    <svg class="w-4.5 h-4.5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 15v-4m5 4V5m5 10V8"/></svg>
+                    <span x-show="!sidebarCollapsed">Laporan Hasil Supervisi</span>
+                </a>
+                <a href="{{ route('pimpinan.supervisions.index') }}" aria-label="Hasil per Dosen" title="Hasil per Dosen" class="flex items-center rounded-xl px-3.5 py-2.5 text-sm {{ request()->routeIs('pimpinan.supervisions.*') ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">
+                    <svg class="w-4.5 h-4.5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 6h14M5 12h14M5 18h14"/></svg>
+                    <span x-show="!sidebarCollapsed">Hasil per Dosen</span>
+                </a>
+            </div>
             @else
             <!-- SUPERVISOR MENU -->
             <div>
@@ -363,7 +380,7 @@
                     <div x-show="!sidebarCollapsed" class="flex flex-col min-w-0 transition-opacity">
                         <span class="text-xs font-bold text-white truncate">{{ auth()->user()->name }}</span>
                         <span class="text-[10px] text-rose-200/80 truncate">
-                            {{ auth()->user()->isLpmStaff() ? 'Superadmin' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor')) }}
+                            {{ auth()->user()->isLeadership() ? 'Pimpinan / Wakil Rektor' : (auth()->user()->isLpmStaff() ? 'Superadmin' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor'))) }}
                         </span>
                     </div>
                 </div>
@@ -441,7 +458,7 @@
                             <p class="text-xs text-stone-500">Masuk sebagai:</p>
                             <p class="font-semibold text-stone-800 truncate">{{ auth()->user()->name }}</p>
                             <span class="inline-block mt-0.5 text-[10px] font-semibold text-[#7B1113] bg-rose-50 px-2 py-0.5 rounded">
-                                {{ auth()->user()->isSuperadmin() ? 'Superadmin' : (auth()->user()->isLpmStaff() ? 'Administrator LPM' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor'))) }}
+                                {{ auth()->user()->isLeadership() ? 'Pimpinan / Wakil Rektor' : (auth()->user()->isSuperadmin() ? 'Superadmin' : (auth()->user()->isLpmStaff() ? 'Administrator LPM' : (auth()->user()->hasRole('prodi') ? 'Prodi' : (auth()->user()->hasRole('fakultas') ? 'Fakultas' : 'Supervisor')))) }}
                             </span>
                         </div>
                         
