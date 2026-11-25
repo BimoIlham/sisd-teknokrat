@@ -15,9 +15,6 @@
                     <option>Belum ada periode supervisi</option>
                 @endforelse
             </select>
-            @if($scope->isLeadershipFaculty())
-                <div class="max-w-sm">@include('unit.program-filter')</div>
-            @endif
         </form>
     </header>
 

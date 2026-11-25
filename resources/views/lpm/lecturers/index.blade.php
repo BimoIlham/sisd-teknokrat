@@ -27,7 +27,7 @@
 
             <!-- Filter Fakultas -->
             <div class="filter-field">
-                @if($isUnit && ($scope->isLeadershipFaculty() || $scope->studyProgramId() === null))
+                @if($isUnit && ! $scope->isLeadershipFaculty() && $scope->studyProgramId() === null)
                 <select name="study_program_id" aria-label="Program Studi" onchange="this.form.submit()" class="filter-control">
                     <option value="">Semua Program Studi</option>
                     @foreach($unitPrograms as $program)

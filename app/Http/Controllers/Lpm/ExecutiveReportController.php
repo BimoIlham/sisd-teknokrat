@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Lpm;
 use App\Http\Controllers\Controller;
 use App\Models\Faculty;
 use App\Models\PeriodTarget;
+use App\Models\StudyProgram;
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
 use App\Models\SupervisionStage;
@@ -18,7 +19,7 @@ use Illuminate\View\View;
 
 class ExecutiveReportController extends Controller
 {
-    public function index(Request $request, ?Faculty $faculty = null): View
+    public function index(Request $request, ?Faculty $faculty = null, ?StudyProgram $program = null): View
     {
         $scope = $request->routeIs('unit.*', 'pimpinan.*') ? OrganizationalScope::forRequest($request) : null;
         $periods = SupervisionPeriod::query()

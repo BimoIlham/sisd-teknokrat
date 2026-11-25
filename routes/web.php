@@ -160,6 +160,16 @@ Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan
             ->middleware('throttle:report-exports')->name('supervisions.pdf');
         Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
         Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+
+        Route::prefix('programs/{program}')->name('programs.')->group(function () {
+            Route::get('/', [UnitDashboardController::class, 'index'])->name('dashboard');
+            Route::get('/lecturers', [LecturerDirectoryController::class, 'index'])->name('lecturers.index');
+            Route::get('/lecturers/{lecturer}', [LeadershipFacultyController::class, 'showProgramLecturer'])->name('lecturers.show');
+            Route::get('/supervisions/{supervision}/pdf', [LeadershipFacultyController::class, 'downloadProgramResult'])
+                ->middleware('throttle:report-exports')->name('supervisions.pdf');
+            Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
+            Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+        });
     });
 });
 

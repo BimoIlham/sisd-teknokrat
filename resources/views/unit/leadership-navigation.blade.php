@@ -32,9 +32,6 @@
             @php
                 $activeFaculty = ($scope ?? null)?->isLeadershipFaculty() && $scope->facultyId() === $faculty->id;
                 $facultyParams = ['faculty' => $faculty] + $periodLink;
-                if ($activeFaculty) {
-                    $facultyParams['study_program_id'] = $scope->studyProgramId();
-                }
             @endphp
             <div x-data="{ open: @js($activeFaculty) }">
                 <button type="button" @click="open = !open" :aria-expanded="open.toString()"
@@ -44,11 +41,33 @@
                     <svg :class="{ 'rotate-180': open }" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div id="leadership-faculty-{{ $faculty->id }}" x-show="open" @unless($activeFaculty) x-cloak @endunless class="ml-3 space-y-1">
-                    @foreach($facultyLinks as $name => [$label, $activeRoute])
-                        @php $activePage = $activeFaculty && request()->routeIs('pimpinan.faculties.'.$activeRoute); @endphp
-                        <a href="{{ route('pimpinan.faculties.'.$name, $facultyParams) }}"
-                            @if($activePage) aria-current="page" @endif
-                            class="flex items-center rounded-xl px-3.5 py-2 text-sm {{ $activePage ? 'bg-white font-bold text-[#7B1113]' : 'text-rose-100 hover:bg-white/10 hover:text-white' }}">{{ $label }}</a>
+                    @include('unit.leadership-section-links', [
+                        'sectionPrefix' => 'pimpinan.faculties.',
+                        'sectionParams' => $facultyParams,
+                        'sectionActive' => $activeFaculty && $scope->studyProgramId() === null,
+                    ])
+                    @if($faculty->studyPrograms->isNotEmpty())
+                        <div class="px-3 pt-4 text-[11px] font-extrabold uppercase tracking-wider text-rose-100/80">Program Studi</div>
+                    @endif
+                    @foreach($faculty->studyPrograms as $program)
+                        @php
+                            $activeProgram = $activeFaculty && $scope->studyProgramId() === $program->id;
+                        @endphp
+                        <div x-data="{ programOpen: @js($activeProgram) }">
+                            <button type="button" @click="programOpen = !programOpen" :aria-expanded="programOpen.toString()"
+                                aria-controls="leadership-program-{{ $program->id }}"
+                                class="flex w-full items-center justify-between gap-2 rounded-xl px-3.5 py-2 text-left text-sm font-semibold text-rose-100 hover:bg-white/10 hover:text-white">
+                                <span>{{ $program->name }}</span>
+                                <svg :class="{ 'rotate-180': programOpen }" class="w-3.5 h-3.5 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                            <div id="leadership-program-{{ $program->id }}" x-show="programOpen" @unless($activeProgram) x-cloak @endunless class="ml-3 space-y-1">
+                                @include('unit.leadership-section-links', [
+                                    'sectionPrefix' => 'pimpinan.faculties.programs.',
+                                    'sectionParams' => $facultyParams + ['program' => $program],
+                                    'sectionActive' => $activeProgram,
+                                ])
+                            </div>
+                        </div>
                     @endforeach
                 </div>
             </div>

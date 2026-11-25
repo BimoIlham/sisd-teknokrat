@@ -73,7 +73,7 @@ class LeadershipPortalAccessTest extends TestCase
         $this->get(route('login'))->assertRedirect(route('pimpinan.dashboard'));
     }
 
-    public function test_leadership_can_open_each_faculty_and_filter_its_cohort_and_reports_by_program(): void
+    public function test_leadership_can_open_program_pages_from_the_faculty_sidebar(): void
     {
         $this->seed(CompleteDemoDataSeeder::class);
         $period = SupervisionPeriod::active()->sole();
@@ -89,7 +89,7 @@ class LeadershipPortalAccessTest extends TestCase
         $result = $submitted->firstOrFail();
         $lecturer = $result->assignment->targetLecturer;
         $leadership = $this->createAccount('pimpinan');
-        $filters = ['faculty' => $faculty, 'period_id' => $period->id, 'study_program_id' => $program->id];
+        $programPage = ['faculty' => $faculty, 'program' => $program, 'period_id' => $period->id];
 
         $dashboard = $this->actingAs($leadership)->get(route('pimpinan.dashboard'))->assertOk();
         foreach ($faculties as $listedFaculty) {
@@ -103,27 +103,42 @@ class LeadershipPortalAccessTest extends TestCase
         $this->get(route('pimpinan.faculties.index'))->assertRedirect(route('pimpinan.dashboard'));
         $this->get(route('pimpinan.supervisions.index'))->assertRedirect(route('pimpinan.reports.supervision'));
 
-        $this->get(route('pimpinan.faculties.dashboard', $filters))->assertOk()->assertViewHas('submittedCount', $expectedCount);
-        $this->get(route('pimpinan.faculties.analytics.index', $filters))->assertOk()->assertSee('Analisis Kohort T1/T2')
-            ->assertSee($lecturer->name)->assertSee($program->name)->assertDontSee($outsideProgram->name)
+        $this->get(route('pimpinan.faculties.dashboard', ['faculty' => $faculty, 'period_id' => $period->id]))->assertOk()
+            ->assertSee('aria-controls="leadership-program-'.$program->id.'"', false)
+            ->assertSee(route('pimpinan.faculties.programs.dashboard', $programPage))
+            ->assertViewHas('submittedCount', fn (int $count): bool => $count > $expectedCount)
+            ->assertDontSee('name="study_program_id"', false);
+        $this->get(route('pimpinan.faculties.programs.dashboard', $programPage))->assertOk()
+            ->assertSee('Dashboard '.$program->name)->assertViewHas('submittedCount', $expectedCount);
+        $this->get(route('pimpinan.faculties.programs.analytics.index', $programPage))->assertOk()->assertSee('Analisis Kohort T1/T2')
+            ->assertSee($lecturer->name)->assertSee($program->name)
+            ->assertDontSee('name="study_program_id"', false)
             ->assertViewHas('analytics', fn (array $analytics): bool => collect($analytics['stage_results'])->isNotEmpty()
                 && collect($analytics['stage_results'])->every(fn (array $row): bool => $row['prodi'] === $program->name));
-        $this->get(route('pimpinan.faculties.reports.supervision', $filters))->assertOk()
+        $this->get(route('pimpinan.faculties.programs.reports.supervision', $programPage))->assertOk()
             ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === $expectedCount)
+            ->assertDontSee('name="study_program_id"', false)
             ->assertDontSee('Ekspor Excel');
-        $this->get(route('pimpinan.faculties.lecturers.index', $filters))->assertOk()
-            ->assertSee(route('pimpinan.faculties.lecturers.show', $filters + ['lecturer' => $lecturer]))
-            ->assertDontSee($outsideProgram->name)->assertDontSee('Tambah Dosen');
-        $this->get(route('pimpinan.faculties.lecturers.show', $filters + ['lecturer' => $lecturer]))->assertOk()
-            ->assertSee(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $faculty, 'supervision' => $result, 'study_program_id' => $program->id]))
+        $this->get(route('pimpinan.faculties.programs.lecturers.index', $programPage))->assertOk()
+            ->assertSee(route('pimpinan.faculties.programs.lecturers.show', $programPage + ['lecturer' => $lecturer]))
+            ->assertViewHas('lecturers', fn ($page): bool => $page->isNotEmpty()
+                && $page->every(fn ($row): bool => $row->study_program_id === $program->id))
+            ->assertDontSee('name="study_program_id"', false)->assertDontSee('Tambah Dosen');
+        $programPdf = ['faculty' => $faculty, 'program' => $program, 'supervision' => $result];
+        $this->get(route('pimpinan.faculties.programs.lecturers.show', $programPage + ['lecturer' => $lecturer]))->assertOk()
+            ->assertSee(route('pimpinan.faculties.programs.supervisions.pdf', $programPdf))
             ->assertDontSee('Tambah Jadwal');
-        $this->get(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $faculty, 'supervision' => $result]))->assertOk()
+        $this->get(route('pimpinan.faculties.programs.supervisions.pdf', $programPdf))->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
-        $this->get(route('pimpinan.faculties.supervisions.pdf', ['faculty' => $outsideFaculty, 'supervision' => $result]))->assertNotFound();
-        $this->get(route('pimpinan.faculties.lecturers.show', ['faculty' => $outsideFaculty, 'lecturer' => $lecturer]))->assertNotFound();
+        $otherProgramInFaculty = $faculty->studyPrograms()->where('code', 'SI')->sole();
+        $this->get(route('pimpinan.faculties.programs.supervisions.pdf', ['program' => $otherProgramInFaculty] + $programPdf))->assertNotFound();
+        $this->get(route('pimpinan.faculties.programs.lecturers.show', ['program' => $otherProgramInFaculty, 'lecturer' => $lecturer] + $programPage))->assertNotFound();
         foreach (['dashboard', 'analytics.index', 'reports.supervision', 'lecturers.index'] as $section) {
-            $this->get(route('pimpinan.faculties.'.$section, ['faculty' => $faculty, 'study_program_id' => $outsideProgram->id]))->assertNotFound();
+            $this->get(route('pimpinan.faculties.programs.'.$section, ['faculty' => $faculty, 'program' => $outsideProgram]))->assertNotFound();
         }
+        $this->get(route('pimpinan.faculties.dashboard', ['faculty' => $faculty, 'study_program_id' => $program->id]))
+            ->assertOk()->assertSee('Dashboard '.$program->name);
+        $this->get(route('pimpinan.faculties.dashboard', ['faculty' => $faculty, 'study_program_id' => $outsideProgram->id]))->assertNotFound();
     }
 
     public function test_leadership_can_view_university_wide_dashboard_cohort_and_report(): void

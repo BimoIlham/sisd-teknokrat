@@ -17,17 +17,15 @@ class OrganizationalScope
 
     private readonly string $label;
 
-    public function __construct(User $user, private readonly ?Faculty $leadershipFaculty = null, ?int $programId = null, bool $universityWide = false)
+    public function __construct(User $user, private readonly ?Faculty $leadershipFaculty = null, private readonly ?StudyProgram $leadershipProgram = null, bool $universityWide = false)
     {
         if ($leadershipFaculty) {
             abort_unless($user->isLeadership(), 403);
             abort_unless($leadershipFaculty->is_active, 404);
-            if ($programId !== null) {
-                abort_unless($leadershipFaculty->studyPrograms()->whereKey($programId)->exists(), 404);
-            }
+            abort_if($leadershipProgram && $leadershipProgram->faculty_id !== $leadershipFaculty->id, 404);
             $this->facultyId = $leadershipFaculty->id;
-            $this->studyProgramId = $programId;
-            $this->label = $leadershipFaculty->name;
+            $this->studyProgramId = $leadershipProgram?->id;
+            $this->label = $leadershipProgram?->name ?? $leadershipFaculty->name;
 
             return;
         }
@@ -68,12 +66,16 @@ class OrganizationalScope
 
     public static function forRequest(Request $request): self
     {
+        $faculty = $request->route('faculty');
+        $program = $request->route('program');
+        if ($faculty && ! $program && $request->routeIs('pimpinan.faculties.*') && $request->filled('study_program_id')) {
+            $program = $faculty->studyPrograms()->findOrFail($request->integer('study_program_id'));
+        }
+
         return new self(
             $request->user(),
-            $request->route('faculty'),
-            $request->routeIs('pimpinan.faculties.*') && $request->filled('study_program_id')
-                ? $request->integer('study_program_id')
-                : null,
+            $faculty,
+            $program,
             $request->routeIs('pimpinan.dashboard', 'pimpinan.analytics.index', 'pimpinan.reports.supervision'),
         );
     }
@@ -97,11 +99,15 @@ class OrganizationalScope
     /** @param array<string, mixed> $parameters */
     public function route(string $name, array $parameters = []): string
     {
-        if ($this->leadershipFaculty) {
-            return route('pimpinan.faculties.'.$name, $parameters + [
+        if ($this->leadershipProgram) {
+            return route('pimpinan.faculties.programs.'.$name, $parameters + [
                 'faculty' => $this->leadershipFaculty,
-                'study_program_id' => $this->studyProgramId,
+                'program' => $this->leadershipProgram,
             ]);
+        }
+
+        if ($this->leadershipFaculty) {
+            return route('pimpinan.faculties.'.$name, $parameters + ['faculty' => $this->leadershipFaculty]);
         }
 
         return route(($this->isUniversityWide() ? 'pimpinan.' : 'unit.').$name, $parameters);
@@ -128,7 +134,7 @@ class OrganizationalScope
             return 'Universitas';
         }
 
-        return $this->studyProgramId && ! $this->isLeadershipFaculty() ? 'Program Studi' : 'Fakultas';
+        return $this->studyProgramId ? 'Program Studi' : 'Fakultas';
     }
 
     public function lecturers(Builder $query): Builder

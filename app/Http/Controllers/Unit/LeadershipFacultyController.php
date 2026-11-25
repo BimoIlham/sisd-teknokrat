@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Lpm\LecturerDirectoryController;
 use App\Models\Faculty;
 use App\Models\Lecturer;
+use App\Models\StudyProgram;
 use App\Models\Supervision;
 use App\Services\OrganizationalScope;
 use App\Services\Reporting\SupervisionResultPdfService;
@@ -38,5 +39,15 @@ class LeadershipFacultyController extends Controller
         abort_unless($scope->supervisions(Supervision::whereKey($supervision->id))->exists(), 404);
 
         return $directory->downloadSupervisionPdf($supervision, $pdfService);
+    }
+
+    public function showProgramLecturer(Request $request, Faculty $faculty, StudyProgram $program, Lecturer $lecturer, LecturerDirectoryController $directory, WeeklySupervisionScheduleGrouper $scheduleGrouper): View
+    {
+        return $this->showLecturer($request, $faculty, $lecturer, $directory, $scheduleGrouper);
+    }
+
+    public function downloadProgramResult(Request $request, Faculty $faculty, StudyProgram $program, Supervision $supervision, LecturerDirectoryController $directory, SupervisionResultPdfService $pdfService): Response
+    {
+        return $this->downloadResult($request, $faculty, $supervision, $directory, $pdfService);
     }
 }

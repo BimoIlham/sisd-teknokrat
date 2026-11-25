@@ -8,9 +8,6 @@
 <div class="space-y-6">
     @if($periods->isNotEmpty())
         <form method="GET" action="{{ $scope?->route('lecturers.show', ['lecturer' => $lecturer]) ?? route('lpm.lecturers.show', $lecturer) }}" class="filter-bar flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-            @if($scope?->isLeadershipFaculty() && $scope->studyProgramId())
-                <input type="hidden" name="study_program_id" value="{{ $scope->studyProgramId() }}">
-            @endif
             <label for="lecturer-period" class="filter-field shrink-0">Semester Supervisi</label>
             <select id="lecturer-period" name="period_id" onchange="this.form.submit()" class="filter-control lg:max-w-sm">
                 @foreach($periods as $availablePeriod)

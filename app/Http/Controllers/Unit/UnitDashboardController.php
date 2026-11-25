@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Faculty;
 use App\Models\Lecturer;
 use App\Models\PeriodTarget;
+use App\Models\StudyProgram;
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
 use App\Services\Analytics\SupervisionAnalyticsService;
@@ -15,7 +16,7 @@ use Illuminate\View\View;
 
 class UnitDashboardController extends Controller
 {
-    public function index(Request $request, SupervisionAnalyticsService $analyticsService, ?Faculty $faculty = null): View
+    public function index(Request $request, SupervisionAnalyticsService $analyticsService, ?Faculty $faculty = null, ?StudyProgram $program = null): View
     {
         $scope = OrganizationalScope::forRequest($request);
         $periods = SupervisionPeriod::with(['academicTerm', 'stages'])->latest('starts_on')->get();

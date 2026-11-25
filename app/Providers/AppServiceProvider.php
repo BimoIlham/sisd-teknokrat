@@ -18,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('unit.leadership-navigation', function (BladeView $view): void {
-            $view->with('leadershipFaculties', Faculty::where('is_active', true)->orderBy('name')->get());
+            $view->with('leadershipFaculties', Faculty::where('is_active', true)
+                ->with(['studyPrograms' => fn ($programs) => $programs->orderBy('name')])
+                ->orderBy('name')->get());
         });
 
         foreach (['supervision-uploads' => 10, 'schedule-generation' => 2, 'schedule-imports' => 6, 'report-exports' => 15, 'schedule-commits' => 6] as $name => $attempts) {

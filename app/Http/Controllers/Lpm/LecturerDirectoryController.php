@@ -39,7 +39,7 @@ class LecturerDirectoryController extends Controller
     /**
      * Display the full list of lecturers with summary metrics.
      */
-    public function index(Request $request, ?Faculty $faculty = null): View
+    public function index(Request $request, ?Faculty $faculty = null, ?StudyProgram $program = null): View
     {
         $isUnit = $request->routeIs('unit.*', 'pimpinan.faculties.*');
         $scope = $isUnit ? OrganizationalScope::forRequest($request) : null;
@@ -73,7 +73,7 @@ class LecturerDirectoryController extends Controller
         if ($facultyFilter) {
             $query->where('faculty_id', $facultyFilter);
         }
-        $selectedProgram = $scope?->isLeadershipFaculty() ? $scope->studyProgramId() : null;
+        $selectedProgram = null;
         if ($scope && ! $scope->isLeadershipFaculty() && $scope->studyProgramId() === null && $request->filled('study_program_id')) {
             $selectedProgram = $request->integer('study_program_id');
             abort_unless($scope->programs()->contains('id', $selectedProgram), 404);
@@ -116,7 +116,7 @@ class LecturerDirectoryController extends Controller
             ->groupBy('faculty_id');
 
         $selectedFaculty = $facultyFilter;
-        $unitPrograms = $scope && ($scope->isLeadershipFaculty() || $scope->studyProgramId() === null)
+        $unitPrograms = $scope && ! $scope->isLeadershipFaculty() && $scope->studyProgramId() === null
             ? $scope->programs()
             : collect();
 
