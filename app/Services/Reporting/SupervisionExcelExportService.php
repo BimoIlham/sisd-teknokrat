@@ -4,6 +4,7 @@ namespace App\Services\Reporting;
 
 use App\Models\Supervision;
 use App\Models\SupervisionPeriod;
+use App\Services\OrganizationalScope;
 use App\Services\Supervision\EvaluationNotes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -28,15 +29,15 @@ class SupervisionExcelExportService
         return class_exists(Spreadsheet::class) && class_exists(Xlsx::class);
     }
 
-    public function hasResults(SupervisionPeriod $period): bool
+    public function hasResults(SupervisionPeriod $period, ?OrganizationalScope $scope = null): bool
     {
-        return $this->submittedResults($period)->exists();
+        return $this->submittedResults($period, $scope)->exists();
     }
 
-    public function build(SupervisionPeriod $period): Spreadsheet
+    public function build(SupervisionPeriod $period, ?OrganizationalScope $scope = null): Spreadsheet
     {
         $period->loadMissing('academicTerm');
-        $rows = $this->rows($period);
+        $rows = $this->rows($period, $scope);
         if ($rows->isEmpty()) {
             throw ValidationException::withMessages(['export' => 'Belum ada hasil supervisi yang sudah dikirim untuk diekspor.']);
         }
@@ -49,16 +50,17 @@ class SupervisionExcelExportService
         foreach (['Rekap Tahap 1&2' => null, 'Tahap 1' => 1, 'Tahap 2' => 2] as $title => $stageNumber) {
             $sheet = $stageNumber === null ? $workbook->getActiveSheet() : $workbook->createSheet();
             $sheet->setTitle($title);
-            $this->writeSheet($sheet, $period, $rows, $stageNumber);
+            $this->writeSheet($sheet, $period, $rows, $stageNumber, $scope?->label());
         }
         $workbook->setActiveSheetIndex(0);
 
         return $workbook;
     }
 
-    private function submittedResults(SupervisionPeriod $period): Builder
+    private function submittedResults(SupervisionPeriod $period, ?OrganizationalScope $scope): Builder
     {
         return Supervision::query()->where('status', 'SUBMITTED')
+            ->when($scope, fn (Builder $query): Builder => $scope->supervisions($query, requireStudyProgram: true))
             ->whereHas('assignment', fn (Builder $assignments): Builder => $assignments->where('status', '<>', 'CANCELLED')
                 ->whereHas('supervisionStage', fn (Builder $stages): Builder => $stages
                     ->where('supervision_period_id', $period->id)->whereIn('stage_no', [1, 2])));
@@ -67,9 +69,9 @@ class SupervisionExcelExportService
     /**
      * @return Collection<int, array{lecturer_id: int, name: string, faculty: string, program: string, mode: string, stages: array<int, array{total: ?float, category: string, notes: string}>}>
      */
-    private function rows(SupervisionPeriod $period): Collection
+    private function rows(SupervisionPeriod $period, ?OrganizationalScope $scope): Collection
     {
-        $submissions = $this->submittedResults($period)->with([
+        $submissions = $this->submittedResults($period, $scope)->with([
             'assignment.targetLecturer.studyProgram.faculty', 'assignment.targetLecturer.faculty',
             'assignment.supervisorLecturer', 'assignment.teachingOccurrence.teachingSchedule.course',
             'assignment.supervisionStage.period.academicTerm', 'formTemplate.sections.questions.options',
@@ -78,8 +80,13 @@ class SupervisionExcelExportService
         $rows = [];
         foreach ($submissions as $supervision) {
             $report = $this->reports->reportData($supervision);
-            $faculty = (string) (data_get($report, 'lecturer.faculty.name') ?: 'Fakultas belum tersedia');
-            $program = (string) (data_get($report, 'lecturer.studyProgram.name') ?: 'Program studi belum tersedia');
+            $currentProgram = $supervision->assignment->targetLecturer?->studyProgram;
+            $faculty = $scope?->facultyId() !== null
+                ? $currentProgram?->faculty?->name
+                : data_get($report, 'lecturer.faculty.name');
+            $program = $scope?->facultyId() !== null ? $currentProgram?->name : data_get($report, 'lecturer.studyProgram.name');
+            $faculty = (string) ($faculty ?: 'Fakultas belum tersedia');
+            $program = (string) ($program ?: 'Program studi belum tersedia');
             $snapshot = $supervision->submission_snapshot ?? [];
             $mode = match (strtoupper((string) ($snapshot['instrument']['delivery_mode'] ?? $supervision->delivery_mode))) {
                 'ONLINE', 'DARING' => 'Online',
@@ -135,7 +142,7 @@ class SupervisionExcelExportService
     }
 
     /** @param Collection<int, array<string, mixed>> $rows */
-    private function writeSheet(Worksheet $sheet, SupervisionPeriod $period, Collection $rows, ?int $stageNumber): void
+    private function writeSheet(Worksheet $sheet, SupervisionPeriod $period, Collection $rows, ?int $stageNumber, ?string $scopeLabel): void
     {
         $lastColumn = $stageNumber === null ? 'G' : 'E';
         $sheet->setShowGridlines(false);
@@ -148,6 +155,11 @@ class SupervisionExcelExportService
         $this->writeText($sheet, 'A5', mb_strtoupper($period->semester_display));
         $sheet->getStyle("A1:{$lastColumn}5")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
         $sheet->getStyle("A1:{$lastColumn}5")->getFont()->setBold(true)->setSize(14);
+        if ($scopeLabel !== null) {
+            $sheet->mergeCells("A6:{$lastColumn}6");
+            $this->writeText($sheet, 'A6', $scopeLabel);
+            $sheet->getStyle('A6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
         $logoPath = public_path('images/logo-teknokrat-sm.png');
         if (is_file($logoPath)) {
             $logo = new Drawing;

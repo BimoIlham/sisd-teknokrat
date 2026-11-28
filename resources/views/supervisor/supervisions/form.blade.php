@@ -9,6 +9,10 @@
     get liveScore() {
         return this.$supervisionScore(this.answers, this.scoredQuestions, this.scoreStrategy);
     },
+    suggestionWordCount(text) {
+        const wordPattern = new RegExp({{ Illuminate\Support\Js::from(\App\Services\Supervision\EvaluationNotes::WORD_PATTERN) }}, 'gu');
+        return (String(text ?? '').match(wordPattern) || []).length;
+    },
     rowVersion: {{ $supervision->row_version }},
     isSaving: false,
     savingPromise: null,
@@ -403,9 +407,19 @@
                                                class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-rose-700">
                                     </div>
                                 @elseif($question->usesStructuredEvaluation())
-                                    <p class="mt-2 text-xs text-slate-500">{{ $question->is_required ? 'Isi minimal satu kolom sesuai hasil pengamatan.' : 'Isi kolom yang sesuai dengan hasil pengamatan.' }} Tidak harus ada kekurangan pada setiap observasi.</p>
+                                    <p class="mt-2 text-xs text-slate-500">
+                                        @if($question->id === $finalEvaluationId)
+                                            Isi Saran Tindak Lanjut sesuai hasil pengamatan.
+                                        @else
+                                            {{ $question->is_required ? 'Isi minimal satu kolom sesuai hasil pengamatan.' : 'Isi kolom yang sesuai dengan hasil pengamatan.' }} Tidak harus ada kekurangan pada setiap observasi.
+                                        @endif
+                                    </p>
                                     <div class="mt-3 space-y-3">
                                         @foreach(\App\Services\Supervision\EvaluationNotes::LABELS as $noteKey => $noteLabel)
+                                            @php
+                                                $isFinalSuggestion = $noteKey === 'suggestion' && $question->id === $finalEvaluationId;
+                                                $minimumWords = \App\Services\Supervision\EvaluationNotes::MIN_SUGGESTION_WORDS;
+                                            @endphp
                                             <div>
                                                 <label for="evaluation-{{ $question->id }}-{{ $noteKey }}" class="mb-1 block text-xs font-semibold text-slate-700">{{ $noteLabel }}</label>
                                                 <textarea id="evaluation-{{ $question->id }}-{{ $noteKey }}"
@@ -413,7 +427,14 @@
                                                           x-model="answers[{{ $question->id }}].{{ $noteKey }}"
                                                           @input.debounce.750ms="triggerAutoSave()"
                                                           rows="3" maxlength="5000"
+                                                          @if($isFinalSuggestion) aria-describedby="final-suggestion-help" @endif
                                                           class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-rose-700"></textarea>
+                                                @if($isFinalSuggestion)
+                                                    <p id="final-suggestion-help" class="mt-1 text-xs text-slate-600">
+                                                        Minimal {{ $minimumWords }} kata untuk mengirim hasil.
+                                                        <span x-text="suggestionWordCount(answers[{{ $question->id }}]?.suggestion) + ' / {{ $minimumWords }} kata'"></span>
+                                                    </p>
+                                                @endif
                                             </div>
                                         @endforeach
                                     </div>

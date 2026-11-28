@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Faculty;
 use App\Models\Lecturer;
 use App\Models\StageInstrument;
+use App\Models\StudyProgram;
 use App\Models\Supervision;
 use App\Models\SupervisionAssignment;
 use App\Models\SupervisionPeriod;
@@ -270,6 +272,64 @@ class SupervisionExcelExportTest extends TestCase
         $this->actingAs($user)->get(route('lpm.reports.supervision.excel', ['period_id' => 1]))->assertForbidden();
     }
 
+    public function test_report_and_excel_use_the_same_unit_scope_for_faculty_program_and_leadership(): void
+    {
+        [, $period] = $this->createFixture();
+        $faculty = Faculty::create(['code' => 'EX-A', 'name' => 'Fakultas A', 'is_active' => true]);
+        $outsideFaculty = Faculty::create(['code' => 'EX-B', 'name' => 'Fakultas B', 'is_active' => true]);
+        $program = $faculty->studyPrograms()->create(['code' => 'EX-ONE', 'name' => 'Prodi Satu', 'is_active' => true]);
+        $siblingProgram = $faculty->studyPrograms()->create(['code' => 'EX-TWO', 'name' => 'Prodi Dua', 'is_active' => true]);
+        $outsideProgram = $outsideFaculty->studyPrograms()->create(['code' => 'EX-OUT', 'name' => 'Prodi Luar', 'is_active' => true]);
+        $emptyProgram = $faculty->studyPrograms()->create(['code' => 'EX-EMPTY', 'name' => 'Prodi Kosong', 'is_active' => true]);
+        $lecturers = [
+            $this->createLecturer('Dosen A', $program),
+            $this->createLecturer('Dosen B', $siblingProgram),
+            $this->createLecturer('Dosen C', $outsideProgram),
+            Lecturer::create(['name' => 'Dosen Tanpa Prodi', 'faculty_id' => $faculty->id, 'is_active' => true]),
+        ];
+        foreach ($lecturers as $lecturer) {
+            $this->createResult($period, $lecturer, 1, 4, 4, 'Tahap 1');
+            $this->createResult($period, $lecturer, 2, 3, 3, 'Tahap 2');
+        }
+
+        $facultyAccount = User::factory()->create(['faculty_id' => $faculty->id])->assignRole('fakultas');
+        $programAccount = User::factory()->create(['study_program_id' => $program->id])->assignRole('prodi');
+        $leadership = User::factory()->create()->assignRole('pimpinan');
+        $periodFilter = ['period_id' => $period->id];
+        $outsideFilters = ['faculty_id' => $outsideFaculty->id, 'study_program_id' => $outsideProgram->id];
+        $facultyPage = ['faculty' => $faculty];
+        $programPage = $facultyPage + ['program' => $program];
+        $cases = [
+            [$facultyAccount, 'unit', $outsideFilters, $faculty->name, ['Dosen A', 'Dosen B']],
+            [$programAccount, 'unit', $outsideFilters, $program->name, ['Dosen A']],
+            [$leadership, 'pimpinan', [], 'Seluruh Fakultas', ['Dosen A', 'Dosen B', 'Dosen C', 'Dosen Tanpa Prodi']],
+            [$leadership, 'pimpinan.faculties', $facultyPage, $faculty->name, ['Dosen A', 'Dosen B']],
+            [$leadership, 'pimpinan.faculties.programs', $programPage, $program->name, ['Dosen A']],
+        ];
+        foreach ($cases as [$account, $prefix, $parameters, $label, $expectedLecturers]) {
+            $page = $prefix.'.reports.supervision';
+            $excelUrl = route($page.'.excel', $periodFilter + array_diff_key($parameters, $outsideFilters));
+            $this->actingAs($account)->get(route($page, $periodFilter + $parameters))->assertOk()
+                ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === 2 * count($expectedLecturers))
+                ->assertSee($excelUrl);
+            $response = $this->get(route($page.'.excel', $periodFilter + $parameters))->assertOk()->assertDownload();
+            $workbook = $this->readDownload($response->streamedContent());
+            $this->assertSame(['Rekap Tahap 1&2', 'Tahap 1', 'Tahap 2'], $workbook->getSheetNames());
+            foreach ($workbook->getWorksheetIterator() as $sheet) {
+                $this->assertEqualsCanonicalizing($expectedLecturers, $this->names($sheet));
+                $this->assertSame($label, $sheet->getCell('A6')->getValue());
+            }
+            $workbook->disconnectWorksheets();
+        }
+
+        $programRoute = 'pimpinan.faculties.programs.reports.supervision';
+        $this->get(route($programRoute.'.excel', $periodFilter + $facultyPage + ['program' => $outsideProgram]))->assertNotFound();
+        $emptyPage = $periodFilter + $facultyPage + ['program' => $emptyProgram];
+        $this->get(route($programRoute, $emptyPage))->assertOk()->assertDontSee(route($programRoute.'.excel', $emptyPage));
+        $this->get(route($programRoute.'.excel', $emptyPage))->assertRedirect(route($programRoute, $emptyPage))->assertSessionHas('error');
+        $this->actingAs($programAccount)->get(route('pimpinan.reports.supervision.excel', $periodFilter))->assertForbidden();
+    }
+
     /** @return array{User, SupervisionPeriod} */
     private function createFixture(): array
     {
@@ -278,11 +338,11 @@ class SupervisionExcelExportTest extends TestCase
         return [User::where('email', 'lpm@teknokrat.ac.id')->firstOrFail(), SupervisionPeriod::active()->with('stages')->firstOrFail()];
     }
 
-    private function createLecturer(string $name): Lecturer
+    private function createLecturer(string $name, ?StudyProgram $program = null): Lecturer
     {
         return Lecturer::create([
             'name' => $name, 'is_active' => true,
-            'study_program_id' => Lecturer::where('external_code', 'DSN001')->firstOrFail()->study_program_id,
+            'study_program_id' => $program?->id ?? Lecturer::where('external_code', 'DSN001')->firstOrFail()->study_program_id,
         ]);
     }
 

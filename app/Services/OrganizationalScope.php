@@ -76,7 +76,7 @@ class OrganizationalScope
             $request->user(),
             $faculty,
             $program,
-            $request->routeIs('pimpinan.dashboard', 'pimpinan.analytics.index', 'pimpinan.reports.supervision'),
+            $request->routeIs('pimpinan.dashboard', 'pimpinan.analytics.index', 'pimpinan.reports.supervision', 'pimpinan.reports.supervision.excel'),
         );
     }
 
@@ -137,7 +137,7 @@ class OrganizationalScope
         return $this->studyProgramId ? 'Program Studi' : 'Fakultas';
     }
 
-    public function lecturers(Builder $query): Builder
+    public function lecturers(Builder $query, bool $requireStudyProgram = false): Builder
     {
         if ($this->isUniversityWide()) {
             return $query;
@@ -147,23 +147,25 @@ class OrganizationalScope
             return $query->where('study_program_id', $this->studyProgramId);
         }
 
-        return $query->where(function (Builder $lecturers): void {
-            $lecturers->whereHas('studyProgram', fn (Builder $programs): Builder => $programs->where('faculty_id', $this->facultyId))
-                ->orWhere(fn (Builder $withoutProgram): Builder => $withoutProgram->whereNull('study_program_id')->where('faculty_id', $this->facultyId));
+        return $query->where(function (Builder $lecturers) use ($requireStudyProgram): void {
+            $lecturers->whereHas('studyProgram', fn (Builder $programs): Builder => $programs->where('faculty_id', $this->facultyId));
+            if (! $requireStudyProgram) {
+                $lecturers->orWhere(fn (Builder $withoutProgram): Builder => $withoutProgram->whereNull('study_program_id')->where('faculty_id', $this->facultyId));
+            }
         });
     }
 
-    public function targets(Builder $query): Builder
+    public function targets(Builder $query, bool $requireStudyProgram = false): Builder
     {
         return $this->isUniversityWide()
             ? $query
-            : $query->whereHas('lecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
+            : $query->whereHas('lecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers, $requireStudyProgram));
     }
 
-    public function supervisions(Builder $query): Builder
+    public function supervisions(Builder $query, bool $requireStudyProgram = false): Builder
     {
         return $this->isUniversityWide()
             ? $query
-            : $query->whereHas('assignment.targetLecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers));
+            : $query->whereHas('assignment.targetLecturer', fn (Builder $lecturers): Builder => $this->lecturers($lecturers, $requireStudyProgram));
     }
 }

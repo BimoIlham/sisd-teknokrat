@@ -118,7 +118,7 @@ class LeadershipPortalAccessTest extends TestCase
         $this->get(route('pimpinan.faculties.programs.reports.supervision', $programPage))->assertOk()
             ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === $expectedCount)
             ->assertDontSee('name="study_program_id"', false)
-            ->assertDontSee('Ekspor Excel');
+            ->assertSee(route('pimpinan.faculties.programs.reports.supervision.excel', $programPage));
         $this->get(route('pimpinan.faculties.programs.lecturers.index', $programPage))->assertOk()
             ->assertSee(route('pimpinan.faculties.programs.lecturers.show', $programPage + ['lecturer' => $lecturer]))
             ->assertViewHas('lecturers', fn ($page): bool => $page->isNotEmpty()
@@ -163,7 +163,7 @@ class LeadershipPortalAccessTest extends TestCase
         $this->get(route('pimpinan.reports.supervision', $filters + ['stage' => '1']))->assertOk()
             ->assertViewHas('summary', fn (array $summary): bool => $summary['submitted_count'] === (clone $submitted)
                 ->whereHas('assignment.supervisionStage', fn ($stages) => $stages->where('stage_no', 1))->count())
-            ->assertDontSee('Ekspor Excel');
+            ->assertSee(route('pimpinan.reports.supervision.excel', $filters));
     }
 
     public function test_leadership_cannot_access_drafts_cancelled_results_or_admin_actions(): void

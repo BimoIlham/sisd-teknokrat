@@ -181,6 +181,7 @@ class SubmitService
         $supervision->setRelation('formTemplate', $template);
         $template->load('sections.questions.options');
         $allQuestions = $template->sections->flatMap->questions;
+        $finalEvaluationId = EvaluationNotes::finalQuestionId($template);
         $existingAnswers = SupervisionAnswer::with(['evidence' => fn ($query) => $query->orderBy('id')])->orderBy('question_id')->where('supervision_id', $supervision->id)->get()->keyBy('question_id');
         $unanswered = [];
         $answersMap = [];
@@ -231,10 +232,19 @@ class SubmitService
             }
         }
 
+        $errors = [];
         if ($unanswered !== []) {
-            throw ValidationException::withMessages([
-                'form' => ['Formulir belum lengkap. Terdapat '.count($unanswered).' butir yang belum diisi.', ...$unanswered],
-            ]);
+            $errors['form'] = ['Formulir belum lengkap. Terdapat '.count($unanswered).' butir yang belum diisi.', ...$unanswered];
+        }
+        if ($finalEvaluationId !== null) {
+            $suggestion = $existingAnswers->get($finalEvaluationId)?->evaluation_notes['suggestion'] ?? '';
+            $wordCount = EvaluationNotes::suggestionWordCount($suggestion);
+            if ($wordCount < EvaluationNotes::MIN_SUGGESTION_WORDS) {
+                $errors['suggestion'] = 'Saran Tindak Lanjut terakhir harus berisi minimal '.EvaluationNotes::MIN_SUGGESTION_WORDS." kata. Saat ini {$wordCount} kata.";
+            }
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
         }
 
         return [$answersMap, $existingAnswers];

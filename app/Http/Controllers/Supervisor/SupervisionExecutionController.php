@@ -156,13 +156,16 @@ class SupervisionExecutionController extends Controller
                 ])->values(),
             ])->values();
 
+        $finalEvaluationId = EvaluationNotes::finalQuestionId($supervision->formTemplate);
+
         return view('supervisor.supervisions.form', compact(
             'assignment',
             'supervision',
             'existingAnswersPayload',
             'existingNotesPayload',
             'evidencePayload',
-            'scoredQuestionsPayload'
+            'scoredQuestionsPayload',
+            'finalEvaluationId'
         ));
     }
 
@@ -443,6 +446,10 @@ class SupervisionExecutionController extends Controller
             return redirect()->route('supervisor.supervisions.show', $supervision)
                 ->with('success', 'Formulir supervisi berhasil disubmit. Nilai akhir telah dihitung secara resmi dan data dibekukan.');
         } catch (ValidationException $e) {
+            if (isset($e->errors()['suggestion'])) {
+                return redirect()->route('supervisor.supervisions.form', $supervision->assignment)->withErrors($e->errors());
+            }
+
             return back()->withErrors($e->errors())->withInput();
         } catch (ConflictHttpException $e) {
             return back()->with('error', $e->getMessage());

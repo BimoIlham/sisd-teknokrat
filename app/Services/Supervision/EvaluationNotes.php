@@ -2,13 +2,31 @@
 
 namespace App\Services\Supervision;
 
+use App\Models\FormTemplate;
+use App\Models\Question;
+
 class EvaluationNotes
 {
+    public const int MIN_SUGGESTION_WORDS = 25;
+
+    public const string WORD_PATTERN = '\p{L}[\p{L}\p{M}\p{N}]*(?:[-’\'][\p{L}\p{N}][\p{L}\p{M}\p{N}]*)*';
+
     public const array LABELS = [
         'positive' => 'Hal Positif',
         'improvement' => 'Hal yang Perlu Diperbaiki',
         'suggestion' => 'Saran Tindak Lanjut',
     ];
+
+    public static function finalQuestionId(FormTemplate $template): ?int
+    {
+        return $template->sections->flatMap->questions
+            ->last(fn (Question $question): bool => $question->usesStructuredEvaluation())?->id;
+    }
+
+    public static function suggestionWordCount(string $suggestion): int
+    {
+        return preg_match_all('/'.self::WORD_PATTERN.'/u', $suggestion) ?: 0;
+    }
 
     /**
      * @param  array<string, string|null>  $notes

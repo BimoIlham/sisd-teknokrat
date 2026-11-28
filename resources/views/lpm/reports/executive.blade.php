@@ -74,12 +74,10 @@
                 </form>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
-                        @if($canExportExcel)
-                            <a href="{{ route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]) }}" class="filter-button">Ekspor Excel (3 Sheet)</a>
-                        @else
-                            <button type="button" disabled class="filter-button disabled:cursor-not-allowed disabled:opacity-50">Ekspor Excel (3 Sheet)</button>
-                        @endif
+                    @if($excelUrl)
+                        <a href="{{ $excelUrl }}" class="filter-button">Ekspor Excel (3 Sheet)</a>
+                    @else
+                        <button type="button" disabled class="filter-button disabled:cursor-not-allowed disabled:opacity-50">Ekspor Excel (3 Sheet)</button>
                     @endif
 
                     <button
@@ -93,9 +91,7 @@
                     </button>
                 </div>
             </div>
-            @if(auth()->user()->isLpmStaff() && request()->routeIs('lpm.*'))
-                <p class="text-xs text-slate-500 print:hidden">Ekspor Excel mencakup Tahap 1 dan 2 pada semester terpilih.</p>
-            @endif
+            <p class="text-xs text-slate-500 print:hidden">Ekspor Excel mencakup Tahap 1 dan 2 pada semester terpilih.</p>
         </div>
     </section>
 

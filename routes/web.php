@@ -149,6 +149,7 @@ Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan
     Route::get('/dashboard', [UnitDashboardController::class, 'index'])->name('dashboard');
     Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
     Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    Route::get('/reports/supervision/excel', SupervisionExcelController::class)->middleware('throttle:report-exports')->name('reports.supervision.excel');
     Route::get('/faculties', [LeadershipFacultyController::class, 'redirectToDashboard'])->name('faculties.index');
     Route::get('/supervisions', [LeadershipFacultyController::class, 'redirectToReport'])->name('supervisions.index');
 
@@ -160,6 +161,7 @@ Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan
             ->middleware('throttle:report-exports')->name('supervisions.pdf');
         Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
         Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+        Route::get('/reports/supervision/excel', SupervisionExcelController::class)->middleware('throttle:report-exports')->name('reports.supervision.excel');
 
         Route::prefix('programs/{program}')->name('programs.')->group(function () {
             Route::get('/', [UnitDashboardController::class, 'index'])->name('dashboard');
@@ -169,6 +171,7 @@ Route::middleware(['auth', 'role:pimpinan'])->prefix('pimpinan')->name('pimpinan
                 ->middleware('throttle:report-exports')->name('supervisions.pdf');
             Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
             Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+            Route::get('/reports/supervision/excel', SupervisionExcelController::class)->middleware('throttle:report-exports')->name('reports.supervision.excel');
         });
     });
 });
@@ -181,6 +184,7 @@ Route::middleware(['auth', 'role:fakultas|prodi'])->prefix('unit')->name('unit.'
         ->middleware('throttle:report-exports')->name('supervisions.pdf');
     Route::get('/analytics', [UnitAnalyticsController::class, 'index'])->name('analytics.index');
     Route::get('/reports/supervision', [ExecutiveReportController::class, 'index'])->name('reports.supervision');
+    Route::get('/reports/supervision/excel', SupervisionExcelController::class)->middleware('throttle:report-exports')->name('reports.supervision.excel');
 });
 
 Route::middleware(['auth', 'role:superadmin', 'root_superadmin'])->prefix('superadmin')->name('superadmin.')->group(function () {

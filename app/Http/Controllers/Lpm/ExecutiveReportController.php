@@ -42,7 +42,7 @@ class ExecutiveReportController extends Controller
             ->where('status', 'SUBMITTED')
             ->whereHas('assignment', fn ($query) => $query->where('status', '<>', 'CANCELLED'))
             ->whereHas('assignment.supervisionStage', fn ($query) => $query->whereIn('id', $stageIds))
-            ->when($scope, fn ($query) => $scope->supervisions($query))
+            ->when($scope, fn ($query) => $scope->supervisions($query, requireStudyProgram: true))
             ->with([
                 'assignment.targetLecturer:id,name,external_code',
                 'assignment.supervisionStage:id,supervision_period_id,stage_no',
@@ -61,7 +61,7 @@ class ExecutiveReportController extends Controller
         $targetCount = PeriodTarget::query()
             ->where('supervision_period_id', $selectedPeriod?->id)
             ->where('scope_status', 'INCLUDED')
-            ->when($scope, fn ($query) => $scope->targets($query))
+            ->when($scope, fn ($query) => $scope->targets($query, requireStudyProgram: true))
             ->distinct('lecturer_id')
             ->count('lecturer_id');
 
@@ -115,14 +115,16 @@ class ExecutiveReportController extends Controller
             'hasSubmissions' => $submissions->isNotEmpty(),
         ];
         $notes = $this->findingNotes($submissions);
-        $canExportExcel = $request->routeIs('lpm.*') && $selectedPeriod
-            && app(SupervisionExcelExportService::class)->hasResults($selectedPeriod);
+        $excelUrl = $selectedPeriod && app(SupervisionExcelExportService::class)->hasResults($selectedPeriod, $scope)
+            ? ($scope?->route('reports.supervision.excel', ['period_id' => $selectedPeriod->id])
+                ?? route('lpm.reports.supervision.excel', ['period_id' => $selectedPeriod->id]))
+            : null;
 
         $classifiedNotes = $this->classifyNotes($notes);
         $findings = $this->commonFindings($classifiedNotes);
 
         return view('lpm.reports.executive', $viewData + [
-            'canExportExcel' => $canExportExcel,
+            'excelUrl' => $excelUrl,
             'notesCount' => $notes->count(),
             'commonFindings' => $findings,
         ]);

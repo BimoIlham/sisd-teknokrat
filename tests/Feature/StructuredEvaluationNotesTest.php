@@ -47,11 +47,12 @@ class StructuredEvaluationNotesTest extends TestCase
         $this->assertSame('SPADA sudah lengkap.', $answer->evaluation_notes['positive']);
         $this->get(route('supervisor.supervisions.form', $supervision->assignment))->assertOk()
             ->assertSee('Hal Positif')->assertSee('Hal yang Perlu Diperbaiki')->assertSee('Saran Tindak Lanjut')
+            ->assertSee('Minimal 25 kata untuk mengirim hasil.')
             ->assertSee('Video belum tersedia.')->assertDontSee('note-'.$question->id, false);
-        $this->get(route('supervisor.assignments.index'))->assertOk()->assertSee('Lanjutkan Penilaian')->assertSee('Draf');
-        $this->get(route('supervisor.dashboard'))->assertOk()->assertSee('Lanjutkan Penilaian')->assertSee('Draf');
+        $this->get(route('supervisor.assignments.index'))->assertOk()->assertSee('aria-label="Lanjutkan penilaian', false)->assertSee('Draf');
+        $this->get(route('supervisor.dashboard'))->assertOk()->assertSee('aria-label="Lanjutkan penilaian', false)->assertSee('Draf');
         $this->postJson(route('supervisor.supervisions.draft', $supervision), ['answers' => [$question->id => ['positive' => '', 'improvement' => '', 'suggestion' => '']], 'row_version' => 2])->assertOk();
-        $this->get(route('supervisor.assignments.index'))->assertOk()->assertDontSee('Lanjutkan Penilaian')->assertSee('Belum Diisi');
+        $this->get(route('supervisor.assignments.index'))->assertOk()->assertDontSee('aria-label="Lanjutkan penilaian', false)->assertSee('Belum Diisi');
     }
 
     #[TestWith(['string'])]
@@ -72,12 +73,16 @@ class StructuredEvaluationNotesTest extends TestCase
         $this->assertSame(0, $supervision->answers()->count());
     }
 
-    public function test_only_positive_notes_satisfy_required_evaluation_and_freeze_in_pdf_snapshot(): void
+    public function test_suggestion_of_25_words_can_be_submitted_and_frozen_in_pdf_snapshot(): void
     {
         Storage::fake('local');
         [$user, $supervision, $question] = $this->evaluation();
         $this->actingAs($user);
-        $notes = ['positive' => 'Materi SPADA sudah lengkap. <script>alert(1)</script>', 'improvement' => '', 'suggestion' => ''];
+        $notes = [
+            'positive' => 'Materi SPADA sudah lengkap. <script>alert(1)</script>',
+            'improvement' => '',
+            'suggestion' => 'Dosen dapat menambahkan contoh penerapan materi, mengajak mahasiswa mendiskusikan hasilnya, serta memberikan umpan balik pada setiap latihan agar pemahaman konsep meningkat secara bertahap dan terukur.',
+        ];
         $answers = $this->completeAnswers($supervision, $question, $notes);
         app(DraftService::class)->saveDraft($supervision, $answers, $supervision->fresh()->row_version);
         $this->get(route('supervisor.supervisions.review', $supervision))->assertOk()->assertSee('Hal Positif')->assertDontSee('<script>alert(1)</script>', false);
@@ -89,6 +94,35 @@ class StructuredEvaluationNotesTest extends TestCase
         $this->assertEquals($notes, $frozen['evaluation_notes']);
         $this->get(route('supervisor.supervisions.show', $submitted))->assertOk()->assertSee('Hal Positif')->assertDontSee('<script>alert(1)</script>', false);
         $this->assertStringStartsWith('%PDF-', app(SupervisionResultPdfService::class)->generate($submitted->fresh())->output());
+    }
+
+    #[TestWith([0])]
+    #[TestWith([24])]
+    public function test_short_suggestions_are_saved_as_drafts_but_cannot_be_reviewed_or_submitted(int $wordCount): void
+    {
+        Storage::fake('local');
+        [$user, $supervision, $question] = $this->evaluation();
+        $answers = $this->completeAnswers($supervision, $question, [
+            'positive' => 'Materi sudah lengkap.',
+            'suggestion' => trim(str_repeat("materi \n", $wordCount)).' !!! 123',
+        ]);
+        $version = $supervision->fresh()->row_version;
+        $formUrl = route('supervisor.supervisions.form', $supervision->assignment);
+        $this->actingAs($user)->postJson(route('supervisor.supervisions.draft', $supervision), [
+            'answers' => $answers,
+            'row_version' => $version,
+        ])->assertOk();
+
+        $this->get(route('supervisor.supervisions.review', $supervision))
+            ->assertRedirect($formUrl)
+            ->assertSessionHasErrors(['suggestion' => "Saran Tindak Lanjut terakhir harus berisi minimal 25 kata. Saat ini {$wordCount} kata."]);
+
+        $version = $supervision->fresh()->row_version;
+        $this->withSession(['supervision_reviews' => [$supervision->id => $version]])
+            ->post(route('supervisor.supervisions.submit', $supervision), ['review_version' => $version, 'review_confirmed' => '1'])
+            ->assertRedirect($formUrl)->assertSessionHasErrors('suggestion');
+        $this->assertSame('DRAFT', $supervision->fresh()->status);
+        $this->assertNull($supervision->fresh()->submission_snapshot);
     }
 
     public function test_blank_required_evaluation_is_rejected_at_review(): void
